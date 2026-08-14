@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mes Devis — Devis & Factures</title>
+<style>
+  :root {
+    --navy: #0a0a0b; --navy-2: #050506;
+    --accent: #3b82f6; --accent-2: #2563eb;
+    --user-primary: #3b82f6; --user-accent: #60a5fa;
+    --bg: #0f0f11; --card: #17171a; --border: #26262b;
+    --text: #f4f4f5; --muted: #8b8b93;
+    --success: #22c55e; --warning: #f59e0b; --danger: #ef4444; --info: #38bdf8;
+    --radius: 12px; --shadow: 0 1px 3px rgba(0,0,0,.4), 0 4px 12px rgba(0,0,0,.25);
+    --input-bg: #1e1e22;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; height:100%; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased; }
+
+  /* ===== Setup Wizard / Login screens ===== */
+  .center-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+  .auth-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.5); padding: 32px; max-width: 520px; width: 100%; }
+  .auth-card h1 { margin: 0 0 8px; font-size: 22px; }
+  .auth-card .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .auth-card label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 4px; margin-top: 12px; }
+  .auth-card input, .auth-card textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit;
+  }
+  .auth-card textarea { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; min-height: 160px; }
+  .auth-card .btn { display: inline-block; padding: 10px 18px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; font-size: 14px; }
+  .auth-card .btn:hover { background: var(--accent-2); }
+  .auth-card .btn-link { background: none; color: var(--accent); border: none; cursor: pointer; padding: 0; font-size: 13px; text-decoration: underline; }
+  .auth-card .err { background: #fef3f2; color: #b42318; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+  .auth-card .ok { background: #ecfdf3; color: #027a48; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+  .stepper { display: flex; gap: 4px; margin-bottom: 16px; }
+  .stepper .step { flex: 1; height: 4px; background: var(--border); border-radius: 2px; }
+  .stepper .step.active { background: var(--accent); }
+  .help-box { background: rgba(59,130,246,.07); border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 6px; font-size: 13px; margin: 16px 0; }
+  .help-box ol { margin: 6px 0 0; padding-left: 20px; }
+  .help-box ol li { margin-bottom: 4px; }
+  .help-box code { background: var(--input-bg); padding: 1px 4px; border-radius: 3px; font-size: 12px; border: 1px solid var(--border); }
+
+  /* ===== App layout ===== */
+  .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+  .sidebar { background: var(--navy); color: #a1a1aa; padding: 24px 16px; display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+  .sidebar .brand { color: #fff; font-weight: 800; font-size: 17px; padding: 4px 12px 24px; border-bottom: 1px solid #1f1f24; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; letter-spacing: -0.01em; }
+  .sidebar .brand .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 900; }
+  .sidebar nav a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: #a1a1aa; text-decoration: none; margin-bottom: 2px; font-weight: 500; cursor: pointer; transition: all .15s; }
+  .sidebar nav a:hover { background: #1a1a1f; color: #fff; }
+  .sidebar nav a.active { background: var(--accent); color: #fff; font-weight: 600; }
+  .sidebar .footer { margin-top: auto; padding-top: 16px; border-top: 1px solid #1f1f24; font-size: 12px; color: #71717a; }
+  .sidebar .footer .user { font-weight: 600; color: #e4e4e7; margin-bottom: 4px; word-break: break-all; }
+  .sidebar .footer .presence { display: flex; align-items: center; gap: 6px; margin: 8px 0; font-size: 11px; }
+  .sidebar .footer .presence .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .sidebar .footer button { background: transparent; border: 1px solid #26262b; color: #a1a1aa; padding: 6px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; margin-right: 6px; margin-top: 6px; }
+  .sidebar .footer button:hover { background: #1a1a1f; color: #fff; }
+
+  .main { padding: 24px 32px; max-width: 1400px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .topbar h1 { margin: 0; font-size: 22px; }
+  .topbar .actions { display: flex; gap: 8px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; }
+  .card + .card { margin-top: 16px; }
+  .card h2 { margin: 0 0 16px; font-size: 16px; }
+  .card h3 { margin: 16px 0 8px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; transition: all .15s; }
+  .btn:hover { background: #26262c; border-color: #3a3a42; }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .btn-primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+  .btn-danger { color: var(--danger); border-color: rgba(239,68,68,.3); }
+  .btn-danger:hover { background: rgba(239,68,68,.1); }
+  .btn-ghost { border-color: transparent; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .form-row.cols-1 { grid-template-columns: 1fr; }
+  label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 4px; }
+  input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], input[type=tel], select, textarea {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; background: var(--input-bg); color: var(--text);
+  }
+  input::placeholder, textarea::placeholder { color: #55555e; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid rgba(59,130,246,.3); outline-offset: -1px; border-color: var(--accent); }
+  select option { background: var(--input-bg); color: var(--text); }
+  input[type=date] { color-scheme: dark; }
+  textarea { resize: vertical; min-height: 60px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover { background: #1c1c21; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .stat .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .stat .value { font-size: 24px; font-weight: 700; margin-top: 6px; }
+  .stat .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge-draft { background: rgba(139,139,147,.15); color: #a1a1aa; }
+  .badge-sent { background: rgba(56,189,248,.15); color: #38bdf8; }
+  .badge-accepted { background: rgba(34,197,94,.15); color: #22c55e; }
+  .badge-refused { background: rgba(239,68,68,.15); color: #f87171; }
+  .badge-paid { background: rgba(34,197,94,.15); color: #22c55e; }
+  .badge-overdue { background: rgba(239,68,68,.15); color: #f87171; }
+
+  .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .empty h3 { color: var(--text); margin-bottom: 8px; font-size: 16px; }
+
+  .lines-table th, .lines-table td { padding: 8px; }
+  .lines-table input, .lines-table textarea, .lines-table select { padding: 6px 8px; font-size: 13px; }
+  .lines-table .col-desc { width: 38%; }
+  .lines-table .col-num { width: 10%; }
+  .lines-table .col-tva { width: 12%; }
+  .lines-table .col-total { width: 12%; text-align: right; }
+  .lines-table .col-actions { width: 36px; }
+  .total-row { display: flex; justify-content: space-between; padding: 6px 0; }
+  .total-row.grand { border-top: 2px solid var(--text); margin-top: 8px; padding-top: 12px; font-weight: 700; font-size: 16px; }
+
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #26262c; color: #fff; border: 1px solid #3a3a42; padding: 12px 16px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.5); z-index: 100; }
+  .sync-status { position: fixed; top: 12px; right: 12px; background: var(--card); border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px; box-shadow: var(--shadow); font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; z-index: 50; }
+  .sync-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+  .sync-status.syncing .dot { background: var(--warning); animation: pulse 1s infinite; }
+  .sync-status.offline .dot { background: var(--danger); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+  /* ===== PRINT VIEW ===== */
+  .print-view { display: none; }
+  @media print {
+    html, body { background: #fff !important; }
+    body * { visibility: hidden !important; }
+    .print-view, .print-view * { visibility: visible !important; }
+    .print-view { display: block !important; position: absolute; left: 0; top: 0; width: 100%;
+      padding: 0; background: #fff; color: #111;
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif; font-size: 10pt;
+      -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .print-view * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .app, .sync-status, .center-screen { display: none !important; }
+    @page { size: A4; margin: 14mm 15mm 16mm; }
+  }
+  /* Reset des styles globaux de l'app qui fuient dans le PDF */
+  .print-view table { width: auto; }
+  .print-view td, .print-view th { border: none; padding: 0; text-transform: none; letter-spacing: normal; color: inherit; font-size: inherit; font-weight: inherit; text-align: left; }
+  .print-view table.bp-lines, .print-view table.bp-client, .print-view table.bp-totals { width: 100%; }
+  /* ============ PDF PREMIUM STYLE — anthracite & ambre ============ */
+  :root { --bp-dark: #16283c; --bp-amber: #1e6091; --bp-amber-dark: #14496e; --bp-soft: #f5f7f9; --bp-line: #dfe5ea; }
+  .bp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12pt; padding-bottom: 9pt; border-bottom: 2.5pt solid var(--bp-dark); }
+  .bp-header-left { display: flex; gap: 12pt; align-items: flex-start; max-width: 58%; }
+  .bp-logo { max-width: 100pt; max-height: 52pt; }
+  .bp-co-info { font-size: 8pt; line-height: 1.55; color: #52525b; }
+  .bp-co-name { font-weight: 800; font-size: 10.5pt; color: var(--bp-dark); letter-spacing: -0.01em; margin-bottom: 2pt; }
+  .bp-header-right { text-align: right; }
+  .bp-meta { border-collapse: collapse; font-size: 8.5pt; margin-left: auto; }
+  .bp-meta td { padding: 1.5pt 0 1.5pt 10pt; text-align: right; color: #52525b; }
+  .bp-meta-lbl { font-weight: 700; color: var(--bp-dark); text-transform: uppercase; font-size: 7.5pt; letter-spacing: .05em; }
+  .bp-title { font-size: 16pt; font-weight: 800; color: var(--bp-dark); margin: 4pt 0 16pt; letter-spacing: -0.02em; padding-left: 10pt; border-left: 4pt solid var(--bp-amber); }
+  .bp-client { border-collapse: collapse; font-size: 8.5pt; margin-bottom: 12pt; background: var(--bp-soft); border-radius: 6pt; padding: 8pt; width: 100%; }
+  .bp-client td { padding: 3pt 10pt; vertical-align: top; }
+  .bp-client tr:first-child td { padding-top: 8pt; }
+  .bp-client tr:last-child td { padding-bottom: 8pt; }
+  .bp-client-lbl { color: #78716c; width: 120pt; font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; }
+  table.bp-lines { width: 100%; border-collapse: collapse; margin-bottom: 10pt; }
+  table.bp-lines thead { display: table-header-group; }
+  table.bp-lines tbody tr { page-break-inside: avoid; break-inside: avoid; }
+  table.bp-lines thead th { background: var(--bp-dark); color: #fff; padding: 7pt 8pt; font-size: 8pt; font-weight: 700; text-align: left; letter-spacing: .06em; text-transform: uppercase; border-bottom: 2.5pt solid var(--bp-amber); }
+  table.bp-lines thead th:not(:first-child) { text-align: center; }
+  table.bp-lines thead th:last-child, table.bp-lines thead th:nth-child(4) { text-align: right; }
+  table.bp-lines tbody td { padding: 6pt 8pt; border-bottom: 1pt solid var(--bp-line); font-size: 8pt; vertical-align: top; color: #27272a; }
+  table.bp-lines tbody tr:nth-child(even) td { background: #fbfaf8; }
+  .bp-desc { text-align: left; line-height: 1.5; }
+  .bp-c { text-align: center; white-space: nowrap; color: #52525b; }
+  .bp-r { text-align: right; white-space: nowrap; font-weight: 600; }
+  .bp-bottom { display: flex; gap: 18pt; margin-top: 6pt; page-break-inside: avoid; }
+  .bp-bottom-left { flex: 1.2; font-size: 7.3pt; line-height: 1.45; color: #52525b; }
+  .bp-bottom-right { flex: 1; }
+  .bp-block { margin-bottom: 7pt; padding: 6pt 8pt; background: var(--bp-soft); border-radius: 6pt; page-break-inside: avoid; }
+  .bp-block-title { font-weight: 800; margin-bottom: 2pt; color: var(--bp-dark); text-transform: uppercase; font-size: 7pt; letter-spacing: .05em; }
+  .bp-block strong { color: var(--bp-dark); }
+  .bp-totals { border-collapse: collapse; width: 100%; font-size: 9pt; margin-bottom: 8pt; }
+  .bp-totals td { padding: 3pt 6pt; }
+  .bp-tot-lbl { font-weight: 600; text-align: right; color: #52525b; }
+  .bp-tot-val { text-align: right; white-space: nowrap; min-width: 70pt; color: var(--bp-dark); font-weight: 600; }
+  .bp-tva-note { text-align: right; font-size: 7.5pt; color: #a8a29e; font-style: italic; }
+  .bp-net { display: flex; justify-content: space-between; align-items: center; padding: 10pt 14pt; background: var(--bp-amber); border-radius: 8pt; margin-bottom: 12pt; }
+  .bp-net-lbl { font-weight: 800; font-size: 10pt; color: #fff; letter-spacing: .04em; }
+  .bp-net-val { font-weight: 900; font-size: 15pt; color: #fff; letter-spacing: -0.02em; }
+  .bp-sign-box { border: 1.5pt dashed #a8a29e; border-radius: 8pt; padding: 10pt; font-size: 8pt; color: #52525b; background: #fff; }
+  .bp-page1 { position: relative; box-sizing: border-box; }
+  .bp-footer { position: absolute; left: 0; right: 0; padding-top: 5pt; border-top: 0.75pt solid var(--bp-line); display: flex; justify-content: space-between; font-size: 7pt; color: #a1a1aa; }
+  /* Sidebar logo (app) */
+  .sidebar-logo-img { max-width: 100%; max-height: 40px; margin-bottom: 12px; }
+  .brand-color { color: var(--user-primary) !important; }
+  .brand-bg { background: var(--user-primary) !important; }
+  /* CGV page 2 */
+  .print-cgv { page-break-before: always; background: #fff; position: relative; box-sizing: border-box; }
+  .print-cgv h2 { font-size: 11pt; font-weight: 700; margin: 0 0 8pt; color: #111; text-align: center; text-transform: uppercase; letter-spacing: .03em; }
+  .print-cgv-body { font-size: 6.8pt; line-height: 1.35; color: #333; text-align: justify; column-count: 2; column-gap: 14pt; column-rule: 1px solid #e6e6e6; }
+  .print-cgv-body strong { color: #111; font-weight: 700; display: inline-block; margin-top: 3pt; }
+
+  .dash-grid { grid-template-columns: 2fr 1fr; }
+@media (max-width: 900px) {
+    .dash-grid { grid-template-columns: 1fr !important; }
+    .app { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .form-row, .form-row.cols-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Initial loading -->
+<div id="boot" class="center-screen">
+  <div class="auth-card">
+    <h1>Mes Devis</h1>
+    <div class="sub">Chargement…</div>
+  </div>
+</div>
+
+<!-- Setup Wizard (Firebase config) -->
+<div id="setup" class="center-screen" style="display:none">
+  <div class="auth-card">
+    <div class="stepper"><div class="step active"></div><div class="step"></div><div class="step"></div></div>
+    <h1>🔥 Connecter Firebase</h1>
+    <div class="sub">Première configuration. À faire une seule fois.</div>
+
+    <div class="help-box">
+      <strong>Avant de continuer, créez un projet Firebase :</strong>
+      <ol>
+        <li>Allez sur <code>console.firebase.google.com</code> (connectez-vous Google)</li>
+        <li>Cliquez « Ajouter un projet », nommez-le <code>mes-devis</code>, désactivez Analytics</li>
+        <li>Une fois créé : menu gauche → <strong>Authentication</strong> → Commencer → Sign-in method → activez <strong>E-mail/Mot de passe</strong></li>
+        <li>Menu gauche → <strong>Firestore Database</strong> → Créer une base → mode production → emplacement <code>eur3</code></li>
+        <li>Engrenage ⚙️ → Paramètres du projet → onglet Général → faites défiler → cliquez l'icône <code>&lt;/&gt;</code> pour ajouter une web app → nom : <code>mes-devis-web</code> → Enregistrer</li>
+        <li>Copiez tout l'objet <code>const firebaseConfig = { ... }</code> qu'il vous montre</li>
+      </ol>
+    </div>
+
+    <label>Collez ici l'objet firebaseConfig complet :</label>
+    <textarea id="setup-config" placeholder="const firebaseConfig = {&#10;  apiKey: &quot;...&quot;,&#10;  authDomain: &quot;...&quot;,&#10;  projectId: &quot;...&quot;,&#10;  ...&#10;};"></textarea>
+    <div id="setup-err" style="display:none" class="err"></div>
+
+    <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: space-between; align-items: center">
+      <button class="btn-link" id="setup-help">Besoin d'aide ?</button>
+      <button class="btn" id="setup-save">Enregistrer la configuration</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firestore Rules helper (step 2 of setup) -->
+<div id="rules" class="center-screen" style="display:none">
+  <div class="auth-card">
+    <div class="stepper"><div class="step active"></div><div class="step active"></div><div class="step"></div></div>
+    <h1>🔒 Règles de sécurité Firestore</h1>
+    <div class="sub">Une dernière étape : autoriser uniquement les utilisateurs connectés à lire/écrire vos données.</div>
+
+    <div class="help-box">
+      <ol>
+        <li>Retournez sur la console Firebase</li>
+        <li>Menu gauche → <strong>Firestore Database</strong></li>
+        <li>Onglet <strong>Règles</strong> en haut</li>
+        <li>Remplacez tout le contenu par le bloc ci-dessous</li>
+        <li>Cliquez <strong>Publier</strong></li>
+      </ol>
+    </div>
+
+    <label>Règles à copier-coller dans Firebase :</label>
+    <textarea readonly style="font-size:11px" rows="10">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /workspace/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    match /publicQuotes/{quoteId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}</textarea>
+    <button class="btn btn-sm" id="copy-rules" style="margin-top:8px">📋 Copier les règles</button>
+
+    <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: space-between">
+      <button class="btn-link" id="rules-back">← Retour</button>
+      <button class="btn" id="rules-done">J'ai publié les règles, continuer →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Login -->
+<div id="login" class="center-screen" style="display:none">
+  <div class="auth-card">
+    <h1>Mes Devis</h1>
+    <div class="sub">Connectez-vous avec votre email</div>
+
+    <label>Email</label>
+    <input type="email" id="login-email" autocomplete="email">
+    <label>Mot de passe</label>
+    <input type="password" id="login-password" autocomplete="current-password">
+
+    <div id="login-err" style="display:none" class="err"></div>
+
+    <div style="margin-top: 16px; display: flex; gap: 8px; align-items: center; justify-content: space-between">
+      <button class="btn-link" id="login-toggle">Pas encore de compte ? Créer</button>
+      <button class="btn" id="login-submit">Se connecter</button>
+    </div>
+
+    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted)">
+      <button class="btn-link" id="login-resetconfig">Reconfigurer Firebase</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main App -->
+<div class="app" id="app" style="display:none">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">D</div>
+      <div>Mes <span style="font-weight:300;color:#a1a1aa">Devis</span></div>
+    </div>
+    <nav id="nav">
+      <a data-route="dashboard"><span>📊</span> Tableau de bord</a>
+      <a data-route="devis"><span>📄</span> Devis</a>
+      <a data-route="factures"><span>🧾</span> Factures</a>
+      <a data-route="clients"><span>👥</span> Clients</a>
+      <a data-route="library"><span>📚</span> Bibliothèque</a>
+      <a data-route="settings"><span>⚙️</span> Paramètres</a>
+    </nav>
+    <div class="footer">
+      <div class="user" id="user-email">…</div>
+      <div class="presence"><span class="dot"></span> <span id="presence-count">1</span> connecté(s)</div>
+      <button onclick="copyShareableUrl()">🔗 Lien d'invitation</button>
+      <button onclick="signOutUser()">Se déconnecter</button>
+    </div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+
+<!-- Public Quote View (lecture seule) -->
+<div class="center-screen" id="public-view" style="display:none">
+  <div class="auth-card" style="max-width: 800px">
+    <div id="public-content"></div>
+  </div>
+</div>
+
+<div class="print-view" id="print" style="position:relative"></div>
+<div id="toast-host"></div>
+<div id="sync-status" class="sync-status" style="display:none"><span class="dot"></span> <span id="sync-label">Synchro</span></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js';
+import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, query } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js';
+
+/* =============================================================
+   SETUP / CONFIG
+   ============================================================= */
+const CONFIG_KEY = 'mesdevis_firebase_config';
+
+/* Configuration Firebase hard-codée (projet mes-devis créé le 6/05/2026) */
+const HARDCODED_CONFIG = {
+  apiKey: "AIzaSyC-PZjmhBqSsSZcWbu1rMaS91XqXnaTC2I",
+  authDomain: "mes-devis-5f931.firebaseapp.com",
+  projectId: "mes-devis-5f931",
+  storageBucket: "mes-devis-5f931.firebasestorage.app",
+  messagingSenderId: "92508335525",
+  appId: "1:92508335525:web:fa9280fe73ab56ec39cc4c"
+};
+
+function loadConfig() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+    return stored || HARDCODED_CONFIG;
+  } catch { return HARDCODED_CONFIG; }
+}
+function saveConfig(cfg) { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
+function clearConfig() { localStorage.removeItem(CONFIG_KEY); location.reload(); }
+
+function parseFirebaseConfigInput(text) {
+  // Accept either {key: value} JSON or "const firebaseConfig = {...};" pasted code
+  let cleaned = text.trim();
+  cleaned = cleaned.replace(/^const\s+firebaseConfig\s*=\s*/, '').replace(/;\s*$/, '');
+  // Replace JS-style keys (no quotes) with JSON keys
+  cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":');
+  // Replace single quotes with double
+  cleaned = cleaned.replace(/'/g, '"');
+  // Remove trailing comma before }
+  cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
+  return JSON.parse(cleaned);
+}
+
+/* =============================================================
+   APP STATE
+   ============================================================= */
+let firebaseApp = null, auth = null, dbFs = null;
+let currentUser = null;
+let unsubscribers = [];
+let db = {
+  company: defaultCompany(),
+  clients: [],
+  quotes: [],
+  invoices: [],
+  serviceItems: [], // bibliothèque de prestations réutilisables
+};
+
+function applyBranding() {
+  const co = db.company || {};
+  // Migration : anciennes couleurs par défaut → thème rouge
+  if (['#5469d4','#f59e0b','#dc2626'].includes(co.primaryColor)) co.primaryColor = '#3b82f6';
+  // Migration : retirer l'ancien logo SVG auto-généré
+  if (co.logo && co.logo.startsWith('data:image/svg+xml;base64,PHN2Zy')) co.logo = '';
+  if (co.primaryColor) {
+    document.documentElement.style.setProperty('--user-primary', co.primaryColor);
+    document.documentElement.style.setProperty('--accent', co.primaryColor);
+    // darken by 8% for hover
+    document.documentElement.style.setProperty('--accent-2', darkenColor(co.primaryColor, 8));
+  }
+}
+function darkenColor(hex, pct) {
+  hex = hex.replace('#','');
+  if (hex.length !== 6) return hex;
+  let r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+  r = Math.max(0, Math.floor(r * (1 - pct/100)));
+  g = Math.max(0, Math.floor(g * (1 - pct/100)));
+  b = Math.max(0, Math.floor(b * (1 - pct/100)));
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+}
+function defaultCompany() {
+  return { name: '', legalForm: 'EI', address: '', postalCode: '', city: '', country: 'France',
+    siret: '', ape: '', email: '', phone: '', website: '', iban: '', bic: '',
+    tvaRegime: 'franchise', tvaNumber: '', decennale: '', rcpro: '', insuranceContract: '', insuredActivity: '', defaultNotes: '', defaultExclusions: '', paymentTerms: '', latePenalties: '',
+    nextQuoteNum: 1, nextInvoiceNum: 1, quotePrefix: 'DEV', invoicePrefix: 'FAC', cgv: '', logo: '', primaryColor: '#3b82f6', accentColor: '#60a5fa' };
+}
+
+/* =============================================================
+   BOOTSTRAPPING
+   ============================================================= */
+async function boot() {
+  // Public quote viewer? URL like ?view=quoteId
+  const params = new URLSearchParams(location.search);
+  const viewQuoteId = params.get('view');
+
+  const cfg = loadConfig();
+  if (!cfg) { showSetup(); return; }
+
+  try {
+    firebaseApp = initializeApp(cfg);
+    auth = getAuth(firebaseApp);
+    dbFs = getFirestore(firebaseApp);
+  } catch (e) {
+    showSetup('Configuration Firebase invalide : ' + e.message);
+    return;
+  }
+
+  if (viewQuoteId) {
+    showPublicQuote(viewQuoteId);
+    return;
+  }
+
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      currentUser = user;
+      attachListeners();
+      showApp();
+    } else {
+      currentUser = null;
+      detachListeners();
+      showLogin();
+    }
+  });
+}
+
+function showBoot() { hideAll(); document.getElementById('boot').style.display = 'flex'; }
+function showSetup(err) {
+  hideAll();
+  document.getElementById('setup').style.display = 'flex';
+  if (err) {
+    const e = document.getElementById('setup-err');
+    e.textContent = err; e.style.display = 'block';
+  }
+}
+function showRules() { hideAll(); document.getElementById('rules').style.display = 'flex'; }
+function showLogin() { hideAll(); document.getElementById('login').style.display = 'flex'; }
+function showApp() { hideAll(); document.getElementById('app').style.display = 'grid'; document.getElementById('user-email').textContent = currentUser.email; document.getElementById('sync-status').style.display = 'flex'; render(); }
+function showPublicView() { hideAll(); document.getElementById('public-view').style.display = 'flex'; }
+function hideAll() {
+  ['boot','setup','rules','login','app','public-view'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+}
+
+/* =============================================================
+   SETUP WIZARD HANDLERS
+   ============================================================= */
+document.getElementById('setup-save').onclick = () => {
+  const text = document.getElementById('setup-config').value;
+  try {
+    const cfg = parseFirebaseConfigInput(text);
+    if (!cfg.apiKey || !cfg.projectId) throw new Error('Il manque apiKey ou projectId dans la config');
+    saveConfig(cfg);
+    showRules();
+  } catch (e) {
+    const err = document.getElementById('setup-err');
+    err.textContent = 'Impossible de parser la config : ' + e.message; err.style.display = 'block';
+  }
+};
+document.getElementById('setup-help').onclick = () => {
+  alert('Ouvrez https://console.firebase.google.com puis suivez les 6 étapes du panneau bleu en haut. À la dernière étape (icône </>), Firebase vous affiche le bloc à copier-coller ici.');
+};
+document.getElementById('rules-back').onclick = () => { showSetup(); };
+document.getElementById('rules-done').onclick = () => { boot(); };
+document.getElementById('copy-rules').onclick = () => {
+  const ta = document.querySelector('#rules textarea');
+  ta.select(); document.execCommand('copy');
+  toast('Règles copiées — collez-les dans Firebase puis publiez');
+};
+
+/* =============================================================
+   LOGIN HANDLERS
+   ============================================================= */
+let loginMode = 'signin'; // or 'signup'
+document.getElementById('login-toggle').onclick = () => {
+  loginMode = loginMode === 'signin' ? 'signup' : 'signin';
+  document.querySelector('#login h1').textContent = loginMode === 'signin' ? 'Mes Devis' : 'Créer un compte';
+  document.getElementById('login-submit').textContent = loginMode === 'signin' ? 'Se connecter' : 'Créer le compte';
+  document.getElementById('login-toggle').textContent = loginMode === 'signin' ? 'Pas encore de compte ? Créer' : 'Déjà un compte ? Se connecter';
+  hideErr();
+};
+document.getElementById('login-submit').onclick = async () => {
+  hideErr();
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  if (!email || !password) { showErr('Email et mot de passe requis'); return; }
+  if (password.length < 6 && loginMode === 'signup') { showErr('Le mot de passe doit faire au moins 6 caractères'); return; }
+  try {
+    if (loginMode === 'signup') {
+      await createUserWithEmailAndPassword(auth, email, password);
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+    }
+  } catch (e) {
+    showErr('Erreur : ' + (e.code || e.message));
+  }
+};
+document.getElementById('login-resetconfig').onclick = () => {
+  if (confirm('Effacer la configuration Firebase ? Vous devrez la coller à nouveau.')) clearConfig();
+};
+function showErr(msg) { const e = document.getElementById('login-err'); e.textContent = msg; e.style.display = 'block'; }
+function hideErr() { document.getElementById('login-err').style.display = 'none'; }
+
+/* =============================================================
+   SIGN OUT
+   ============================================================= */
+window.signOutUser = () => signOut(auth);
+
+/* =============================================================
+   FIRESTORE LISTENERS (real-time sync)
+   ============================================================= */
+function setSync(state, label) {
+  const s = document.getElementById('sync-status');
+  s.classList.remove('syncing', 'offline');
+  if (state === 'syncing') s.classList.add('syncing');
+  if (state === 'offline') s.classList.add('offline');
+  document.getElementById('sync-label').textContent = label || (state === 'syncing' ? 'Synchro…' : 'Synchronisé');
+}
+
+function attachListeners() {
+  detachListeners();
+  setSync('syncing', 'Chargement…');
+  // Single shared workspace = "main"
+  const wsRef = (path) => doc(dbFs, 'workspace', path);
+
+  // Company singleton
+  unsubscribers.push(onSnapshot(wsRef('company'), snap => {
+    db.company = { ...defaultCompany(), ...(snap.exists() ? snap.data() : {}) };
+    setSync('ok'); render();
+  }, err => { setSync('offline', 'Erreur lecture'); console.error(err); }));
+
+  // Clients
+  unsubscribers.push(onSnapshot(collection(dbFs, 'workspace', 'main', 'clients'), snap => {
+    db.clients = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setSync('ok'); render();
+  }));
+  // Quotes
+  unsubscribers.push(onSnapshot(collection(dbFs, 'workspace', 'main', 'quotes'), snap => {
+    db.quotes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setSync('ok'); render();
+    watchPublicQuoteSignatures();
+  }));
+  // Invoices
+  unsubscribers.push(onSnapshot(collection(dbFs, 'workspace', 'main', 'invoices'), snap => {
+    db.invoices = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setSync('ok'); render();
+  }));
+  // Service items (bibliothèque)
+  unsubscribers.push(onSnapshot(collection(dbFs, 'workspace', 'main', 'serviceItems'), snap => {
+    db.serviceItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setSync('ok'); render();
+  }));
+}
+
+async function saveServiceItem(item) {
+  setSync('syncing', 'Enregistrement…');
+  await setDoc(doc(dbFs, 'workspace', 'main', 'serviceItems', item.id), item);
+  setSync('ok');
+}
+async function deleteServiceItem(id) {
+  await deleteDoc(doc(dbFs, 'workspace', 'main', 'serviceItems', id));
+}
+function detachListeners() { unsubscribers.forEach(u => { try { u(); } catch {} }); unsubscribers = []; }
+
+/* =============================================================
+   FIRESTORE WRITES
+   ============================================================= */
+async function saveCompany() {
+  setSync('syncing', 'Enregistrement…');
+  await setDoc(doc(dbFs, 'workspace', 'company'), db.company);
+  setSync('ok');
+}
+async function saveClient(c) {
+  setSync('syncing', 'Enregistrement…');
+  await setDoc(doc(dbFs, 'workspace', 'main', 'clients', c.id), c);
+  setSync('ok');
+}
+async function deleteClientById(id) {
+  await deleteDoc(doc(dbFs, 'workspace', 'main', 'clients', id));
+}
+async function saveDoc(d, kind) {
+  setSync('syncing', 'Enregistrement…');
+  const coll = kind === 'quote' ? 'quotes' : 'invoices';
+  await setDoc(doc(dbFs, 'workspace', 'main', coll, d.id), d);
+  setSync('ok');
+}
+async function deleteDocById(id, kind) {
+  const coll = kind === 'quote' ? 'quotes' : 'invoices';
+  await deleteDoc(doc(dbFs, 'workspace', 'main', coll, id));
+}
+
+/* Public share = duplicate quote into 'publicQuotes' collection (publicly readable) */
+async function publishPublicQuote(quote) {
+  setSync('syncing', 'Publication…');
+  const client = db.clients.find(c => c.id === quote.clientId);
+  await setDoc(doc(dbFs, 'publicQuotes', quote.id), {
+    quote, client: client || null, company: db.company, publishedAt: new Date().toISOString()
+  });
+  setSync('ok');
+  return location.origin + location.pathname + '?view=' + quote.id;
+}
+
+/* Listen to publicQuotes signatures and sync back to workspace + auto-create deposit invoice */
+const signatureListeners = new Set();
+function watchPublicQuoteSignatures() {
+  db.quotes.forEach(q => {
+    if (signatureListeners.has(q.id)) return;
+    signatureListeners.add(q.id);
+    onSnapshot(doc(dbFs, 'publicQuotes', q.id), async (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const publicQ = data.quote;
+      const localQ = db.quotes.find(x => x.id === q.id);
+      if (!localQ) return;
+      // If public has signature but local doesn't, sync it
+      if (publicQ.signature && !localQ.signature) {
+        const updated = { ...localQ, signature: publicQ.signature, status: 'accepted' };
+        await setDoc(doc(dbFs, 'workspace', 'main', 'quotes', q.id), updated);
+        toast('✅ Nouveau devis accepté : ' + q.number + ' par ' + publicQ.signature.signedBy);
+        // Auto-create deposit invoice
+        await createDepositInvoice(updated);
+      }
+    });
+  });
+}
+
+async function createDepositInvoice(quote) {
+  const depositPct = Number(quote.deposit) || 30;
+  const totals = calcDoc(quote);
+  const depositAmount = totals.ttc * depositPct / 100;
+  if (depositAmount <= 0) return;
+  // Check if already exists
+  const existing = db.invoices.find(inv => inv.sourceQuoteId === quote.id && inv.isDeposit);
+  if (existing) return;
+  const prefix = db.company.invoicePrefix || 'FAC';
+  const num = db.company.nextInvoiceNum || 1;
+  const invoice = {
+    id: uid(),
+    number: `${prefix}-${new Date().getFullYear()}-${String(num).padStart(3,'0')}-ACOMPTE`,
+    date: today(),
+    dueDate: addDays(today(), 30),
+    clientId: quote.clientId,
+    object: `Acompte ${depositPct}% sur devis ${quote.number} — ${quote.object||''}`.trim(),
+    lines: [{
+      id: uid(),
+      description: `Acompte ${depositPct}% sur devis ${quote.number}\n${quote.object||''}`,
+      quantity: 1, unit: 'forfait', unitPrice: depositAmount, tva: 0
+    }],
+    conditions: (db.company.tvaRegime==='franchise' ? 'TVA non applicable, art. 293 B du CGI. ' : '') + `Facture d'acompte relative au devis ${quote.number} accepté le ${fmtDate(quote.signature?.signedAt||today())}.`,
+    status: 'draft',
+    sourceQuoteId: quote.id,
+    isDeposit: true,
+    depositPct
+  };
+  await setDoc(doc(dbFs, 'workspace', 'main', 'invoices', invoice.id), invoice);
+  db.company.nextInvoiceNum = num + 1;
+  await saveCompany();
+  toast('💸 Facture d\'acompte créée : ' + invoice.number);
+}
+
+/* =============================================================
+   PUBLIC QUOTE VIEW (no login required)
+   ============================================================= */
+async function showPublicQuote(quoteId) {
+  showPublicView();
+  const el = document.getElementById('public-content');
+  el.innerHTML = '<div style="text-align:center;color:var(--muted)">Chargement du devis…</div>';
+  try {
+    const snap = await new Promise((resolve, reject) => {
+      const unsub = onSnapshot(doc(dbFs, 'publicQuotes', quoteId), s => { unsub(); resolve(s); }, reject);
+    });
+    if (!snap.exists()) {
+      el.innerHTML = '<div class="empty"><h3>Devis introuvable ou non publié</h3></div>'; return;
+    }
+    const data = snap.data();
+    db.company = data.company || defaultCompany();
+    if (data.client) db.clients = [data.client];
+    el.innerHTML = renderPublicQuote(data.quote);
+    document.getElementById('print-btn-public').onclick = () => { renderPrintView(data.quote, 'quote'); window.print(); };
+    const signBtn = document.getElementById('btn-sign');
+    if (signBtn) signBtn.onclick = async () => {
+      const name = document.getElementById('signature-name').value.trim();
+      const consent = document.getElementById('signature-consent').checked;
+      const errEl = document.getElementById('signature-err');
+      const showErr = (m) => { errEl.textContent = m; errEl.style.display = 'block'; };
+      if (name.length < 3) { showErr('Veuillez saisir votre nom complet.'); return; }
+      if (!consent) { showErr('Cochez la case pour confirmer votre accord.'); return; }
+      errEl.style.display = 'none';
+      signBtn.disabled = true; signBtn.textContent = 'Enregistrement…';
+      try {
+        const now = new Date().toISOString();
+        const signature = { signedBy: name, signedAt: now };
+        // Update publicQuotes doc with signature
+        await setDoc(doc(dbFs, 'publicQuotes', quoteId), { ...data, quote: { ...data.quote, signature, status: 'accepted' }, acceptedAt: now }, { merge: true });
+        toast('✅ Devis accepté. L\'entreprise a été notifiée.');
+        location.reload();
+      } catch(e) {
+        showErr('Erreur : ' + e.message);
+        signBtn.disabled = false; signBtn.textContent = '✓ J\'accepte ce devis (Bon pour accord)';
+      }
+    };
+  } catch (e) {
+    el.innerHTML = '<div class="empty"><h3>Erreur</h3><p>' + (e.message || e) + '</p></div>';
+  }
+}
+function renderPublicQuote(doc) {
+  const client = db.clients.find(c => c.id === doc.clientId) || {};
+  const totals = calcDoc(doc);
+  const isSigned = doc.signature && doc.signature.signedAt;
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:32px;font-weight:800">Devis ${escapeHtml(doc.number)}</div>
+        <div style="color:var(--muted);margin-top:4px">${fmtDate(doc.date)}</div>
+        ${isSigned ? `<div style="margin-top:8px;padding:6px 12px;background:rgba(34,197,94,.15);color:#22c55e;border-radius:6px;font-size:13px;display:inline-block">✅ Devis accepté par <strong>${escapeHtml(doc.signature.signedBy)}</strong> le ${fmtDate(doc.signature.signedAt)}</div>` : ''}
+      </div>
+      <button class="btn btn-primary" id="print-btn-public">⎙ Imprimer / PDF</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase">Émetteur</div>
+        <div style="font-weight:700;margin-top:4px">${escapeHtml([db.company.legalForm, db.company.name].filter(Boolean).join(' - '))}</div>
+        <div style="color:var(--muted);font-size:13px">${escapeHtml(db.company.address||'')}<br>${escapeHtml((db.company.postalCode||'')+' '+(db.company.city||''))}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase">Destinataire</div>
+        <div style="font-weight:700;margin-top:4px">${escapeHtml(clientName(client))}</div>
+        <div style="color:var(--muted);font-size:13px">${escapeHtml(client.address||'')}<br>${escapeHtml((client.postalCode||'')+' '+(client.city||''))}</div>
+      </div>
+    </div>
+    ${doc.object ? `<div style="margin-bottom:16px"><strong>Objet :</strong> ${escapeHtml(doc.object)}</div>` : ''}
+    <table>
+      <thead><tr><th>Description</th><th>Qté</th><th>PU HT</th><th>TVA</th><th style="text-align:right">Total HT</th></tr></thead>
+      <tbody>
+        ${doc.lines.map(l => `<tr><td>${nl2br(l.description)}</td><td>${l.quantity}</td><td>${fmtMoney(l.unitPrice)}</td><td>${l.tva}%</td><td style="text-align:right"><strong>${fmtMoney(calcLine(l).ht)}</strong></td></tr>`).join('')}
+      </tbody>
+    </table>
+    <div style="display:flex;justify-content:flex-end;margin-top:16px">
+      <div style="min-width:280px">
+        <div class="total-row"><span>Total HT</span><strong>${fmtMoney(totals.ht)}</strong></div>
+        <div class="total-row"><span>Total TVA</span><strong>${fmtMoney(totals.tva)}</strong></div>
+        <div class="total-row grand"><span>Total TTC</span><strong>${fmtMoney(totals.ttc)}</strong></div>
+      </div>
+    </div>
+    ${doc.conditions ? `<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);white-space:pre-wrap;font-size:13px;color:var(--muted)">${escapeHtml(doc.conditions)}</div>` : ''}
+    ${!isSigned ? `
+    <div style="margin-top:32px;padding:20px;background:rgba(59,130,246,.07);border:1px solid var(--accent);border-radius:12px">
+      <h3 style="margin:0 0 8px">✍️ Accepter ce devis</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">En signant électroniquement ce devis, vous vous engagez contractuellement. Cette signature a la même valeur juridique qu'une signature manuscrite (article 1367 du Code civil).</p>
+      <label style="font-size:12px;color:var(--muted)">Votre nom et prénom (mention manuscrite « Bon pour accord »)</label>
+      <input type="text" id="signature-name" placeholder="ex. Gaylord DUPONT" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;margin-top:4px;font-family:'Brush Script MT', cursive;font-size:22px" autocomplete="name">
+      <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
+        <input type="checkbox" id="signature-consent" style="width:auto"> 
+        <label for="signature-consent" style="font-size:13px;margin:0">Je confirme accepter les conditions du présent devis et m'engager sur les prestations décrites</label>
+      </div>
+      <div id="signature-err" style="display:none;margin-top:8px;color:var(--danger);font-size:13px"></div>
+      <button class="btn btn-primary" id="btn-sign" style="margin-top:14px;width:100%;padding:14px;font-size:15px">✓ J'accepte ce devis (Bon pour accord)</button>
+    </div>` : ''}
+  `;
+}
+
+/* =============================================================
+   COPY SHARE URL
+   ============================================================= */
+window.copyShareableUrl = () => {
+  const url = location.origin + location.pathname;
+  navigator.clipboard.writeText(url).then(() => toast('Lien copié — partagez-le. Les autres devront créer un compte avec leur email pour accéder.'));
+};
+
+/* =============================================================
+   UTILITIES
+   ============================================================= */
+const $ = (sel, el=document) => el.querySelector(sel);
+const $$ = (sel, el=document) => [...el.querySelectorAll(sel)];
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const fmtMoney = (n) => (Number(n)||0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const fmtDate = (s) => s ? new Date(s).toLocaleDateString('fr-FR') : '';
+const today = () => new Date().toISOString().slice(0,10);
+const addDays = (date, days) => { const d = new Date(date); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); };
+function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function nl2br(s) { return escapeHtml(s).replace(/\n/g,'<br>'); }
+function clientName(c) { if (!c) return ''; if (c.type === 'pro') return c.companyName || `${c.firstName||''} ${c.lastName||''}`.trim(); return [c.civility, c.firstName, c.lastName].filter(Boolean).join(' '); }
+function clientById(id) { return db.clients.find(c => c.id === id); }
+function calcLine(line) { const ht = (Number(line.quantity)||0) * (Number(line.unitPrice)||0); const tva = ht * (Number(line.tva)||0) / 100; return { ht, tva, ttc: ht + tva }; }
+function calcDoc(doc) { let ht = 0, tva = 0; (doc.lines||[]).forEach(l => { const c = calcLine(l); ht += c.ht; tva += c.tva; }); return { ht, tva, ttc: ht + tva }; }
+function toast(msg) { const host = $('#toast-host'); const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg; host.appendChild(el); setTimeout(() => el.remove(), 3500); }
+function formatClientAddress(c) { if (!c) return ''; return [c.address, [c.postalCode, c.city].filter(Boolean).join(' '), c.country, c.email && ('Email : ' + c.email), c.phone && ('Tél : ' + c.phone), c.siret && ('SIRET : ' + c.siret)].filter(Boolean).join('\n'); }
+
+/* =============================================================
+   ROUTING
+   ============================================================= */
+function navigate(route) { location.hash = '#/' + route; }
+function currentRoute() { const h = (location.hash || '#/dashboard').replace(/^#\//, ''); return h.split('/'); }
+window.addEventListener('hashchange', render);
+
+function setActiveNav(name) {
+  $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.route === name));
+  $$('#nav a').forEach(a => a.onclick = (e) => { e.preventDefault(); navigate(a.dataset.route); });
+}
+
+/* =============================================================
+   RENDER
+   ============================================================= */
+function render() {
+  if (!currentUser) return;
+  applyBranding();
+  const [section, action, id] = currentRoute();
+  setActiveNav(section);
+  const main = $('#main');
+  switch (section) {
+    case 'dashboard': main.innerHTML = renderDashboard(); break;
+    case 'devis':
+      if (action === 'new') return renderQuoteEditor(null, 'quote');
+      if (action === 'edit' && id) return renderQuoteEditor(id, 'quote');
+      if (action === 'view' && id) return renderQuoteView(id, 'quote');
+      main.innerHTML = renderDocList('quote'); bindDocList('quote'); break;
+    case 'factures':
+      if (action === 'new') return renderQuoteEditor(null, 'invoice');
+      if (action === 'edit' && id) return renderQuoteEditor(id, 'invoice');
+      if (action === 'view' && id) return renderQuoteView(id, 'invoice');
+      main.innerHTML = renderDocList('invoice'); bindDocList('invoice'); break;
+    case 'clients':
+      if (action === 'new' || (action === 'edit' && id)) return renderClientEditor(id);
+      main.innerHTML = renderClientList(); bindClientList(); break;
+    case 'library':
+      if (action === 'new' || (action === 'edit' && id)) return renderServiceItemEditor(id);
+      main.innerHTML = renderServiceItemList(); bindServiceItemList(); break;
+    case 'settings': renderSettings(); break;
+    default: main.innerHTML = renderDashboard();
+  }
+}
+
+function renderDashboard() {
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const thisMonth = now.getMonth();
+  const startMonth = new Date(thisYear, thisMonth, 1).toISOString().slice(0,10);
+  const startYear = new Date(thisYear, 0, 1).toISOString().slice(0,10);
+
+  const totalQuotes = db.quotes.length;
+  const acceptedQuotes = db.quotes.filter(q => q.status === 'accepted').length;
+  const acceptanceRate = totalQuotes > 0 ? Math.round(100 * acceptedQuotes / totalQuotes) : 0;
+
+  const overdueInvoices = db.invoices.filter(i => i.status !== 'paid' && i.dueDate && i.dueDate < today());
+
+  const caMonth = db.invoices.filter(i => i.status === 'paid' && (i.paidAt || i.date) >= startMonth).reduce((s,i) => s + calcDoc(i).ht, 0);
+  const caYear = db.invoices.filter(i => i.status === 'paid' && (i.paidAt || i.date) >= startYear).reduce((s,i) => s + calcDoc(i).ht, 0);
+  const encoursTTC = db.invoices.filter(i => i.status !== 'paid').reduce((s,i) => s + calcDoc(i).ttc, 0);
+
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(thisYear, thisMonth - i, 1);
+    const key = d.toISOString().slice(0,7);
+    const label = d.toLocaleDateString('fr-FR', { month: 'short' });
+    const amount = db.invoices.filter(inv => inv.status === 'paid' && (inv.paidAt||inv.date||'').startsWith(key)).reduce((s,inv) => s + calcDoc(inv).ht, 0);
+    months.push({ key, label, amount });
+  }
+  const maxAmount = Math.max(...months.map(m => m.amount), 1);
+
+  const clientRevenue = {};
+  db.invoices.filter(i => i.status === 'paid').forEach(i => {
+    if (!clientRevenue[i.clientId]) clientRevenue[i.clientId] = 0;
+    clientRevenue[i.clientId] += calcDoc(i).ht;
+  });
+  const topClients = Object.entries(clientRevenue).sort((a,b) => b[1] - a[1]).slice(0,5).map(([cid, amount]) => ({ client: clientById(cid), amount }));
+
+  const recentDocs = [...db.quotes.map(q=>({...q,_kind:'quote'})), ...db.invoices.map(q=>({...q,_kind:'invoice'}))]
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8);
+
+  return `
+    <div class="topbar">
+      <h1>Bonjour 👋 ${db.company.name ? escapeHtml(db.company.name.split(' ')[0]) : ''}</h1>
+      <div class="actions">
+        <a class="btn btn-primary" href="#/devis/new">+ Nouveau devis</a>
+        <a class="btn" href="#/factures/new">+ Nouvelle facture</a>
+        <button class="btn" onclick="exportInvoicesCsv()">📤 Export CSV</button>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="label">CA du mois</div><div class="value" style="color:var(--accent)">${fmtMoney(caMonth)}</div><div class="sub">Facturé et payé</div></div>
+      <div class="stat"><div class="label">CA ${thisYear}</div><div class="value">${fmtMoney(caYear)}</div><div class="sub">Cumul annuel</div></div>
+      <div class="stat"><div class="label">Encours à recevoir</div><div class="value">${fmtMoney(encoursTTC)}</div><div class="sub">${db.invoices.filter(i=>i.status!=='paid').length} facture(s) en attente</div></div>
+      <div class="stat"><div class="label">Taux d'acceptation</div><div class="value">${acceptanceRate}%</div><div class="sub">${acceptedQuotes}/${totalQuotes} devis acceptés</div></div>
+    </div>
+
+    <div class="dash-grid" style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <h2>📈 CA payé — 12 derniers mois</h2>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;height:200px;gap:6px;padding-top:20px;border-bottom:1px solid var(--border)">
+          ${months.map(m => `
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:4px;white-space:nowrap">${m.amount > 0 ? Math.round(m.amount) + '€' : ''}</div>
+              <div style="width:100%;background:var(--accent);border-radius:4px 4px 0 0;height:${Math.max(2, (m.amount/maxAmount)*160)}px" title="${m.label}: ${fmtMoney(m.amount)}"></div>
+              <div style="font-size:11px;margin-top:6px;color:var(--muted)">${m.label}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🏆 Top clients (payé)</h2>
+        ${topClients.length === 0 ? `<div class="empty" style="padding:20px 0"><p style="font-size:13px">Aucune facture payée pour le moment.</p></div>` : `
+          <div style="display:flex;flex-direction:column;gap:8px">
+          ${topClients.map((t,i) => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+              <div style="min-width:0;overflow:hidden"><div style="font-size:11px;color:var(--muted)">#${i+1}</div><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(clientName(t.client)) || '—'}</div></div>
+              <div style="font-weight:700;color:var(--accent);white-space:nowrap;margin-left:8px">${fmtMoney(t.amount)}</div>
+            </div>
+          `).join('')}
+          </div>
+        `}
+      </div>
+    </div>
+
+    ${overdueInvoices.length > 0 ? `
+    <div class="card" style="border-left:4px solid var(--danger)">
+      <h2 style="color:var(--danger)">⚠️ Factures en retard (${overdueInvoices.length})</h2>
+      <table><thead><tr><th>Numéro</th><th>Client</th><th>Échéance</th><th>Total TTC</th><th></th></tr></thead><tbody>
+      ${overdueInvoices.map(d => `<tr class="clickable" onclick="navigate('factures/view/${d.id}')">
+        <td><strong>${escapeHtml(d.number)}</strong></td>
+        <td>${escapeHtml(clientName(clientById(d.clientId)))}</td>
+        <td style="color:var(--danger)">${fmtDate(d.dueDate)}</td>
+        <td>${fmtMoney(calcDoc(d).ttc)}</td>
+        <td onclick="event.stopPropagation()"><a class="btn btn-sm" href="mailto:${escapeHtml(clientById(d.clientId)?.email||'')}?subject=Relance%20facture%20${escapeHtml(d.number)}&body=Bonjour%2C%0A%0AJe%20me%20permets%20de%20vous%20relancer%20concernant%20la%20facture%20${escapeHtml(d.number)}%20du%20${fmtDate(d.date)}%20d%27un%20montant%20de%20${encodeURIComponent(fmtMoney(calcDoc(d).ttc))}%2C%20dont%20l%27%C3%A9ch%C3%A9ance%20%C3%A9tait%20le%20${fmtDate(d.dueDate)}.%0A%0ACordialement.">📧 Relancer</a></td>
+      </tr>`).join('')}
+      </tbody></table>
+    </div>` : ''}
+
+    <div class="card">
+      <h2>📄 Documents récents</h2>
+      ${recentDocs.length === 0 ? `<div class="empty"><h3>Aucun document</h3><p>Créez votre premier devis pour commencer.</p><a class="btn btn-primary" href="#/devis/new">+ Nouveau devis</a></div>` : `
+        <table><thead><tr><th>Type</th><th>Numéro</th><th>Client</th><th>Date</th><th>Total HT</th><th>Statut</th></tr></thead>
+        <tbody>${recentDocs.map(d => `<tr class="clickable" onclick="navigate('${d._kind==='quote'?'devis':'factures'}/view/${d.id}')">
+          <td>${d._kind === 'quote' ? '📄 Devis' : '🧾 Facture'}</td><td>${escapeHtml(d.number||'')}</td>
+          <td>${escapeHtml(clientName(clientById(d.clientId)))}</td><td>${fmtDate(d.date)}</td>
+          <td>${fmtMoney(calcDoc(d).ht)}</td><td>${statusBadge(d.status, d._kind)}</td></tr>`).join('')}</tbody></table>`}
+    </div>`;
+}
+
+function renderClientList() {
+  return `<div class="topbar"><h1>Clients</h1><a class="btn btn-primary" href="#/clients/new">+ Nouveau client</a></div>
+    <div class="card">${db.clients.length === 0 ? `<div class="empty"><h3>Aucun client</h3><p>Ajoutez vos clients pour les sélectionner dans vos devis.</p></div>` : `
+      <table><thead><tr><th>Nom</th><th>Type</th><th>Email</th><th>Ville</th><th></th></tr></thead><tbody>
+      ${db.clients.map(c => `<tr><td><strong>${escapeHtml(clientName(c))}</strong></td><td>${c.type==='pro' ? 'Pro' : 'Particulier'}</td>
+        <td>${escapeHtml(c.email||'—')}</td><td>${escapeHtml(c.city||'')}</td>
+        <td style="text-align:right"><a class="btn btn-sm" href="#/clients/edit/${c.id}">Modifier</a>
+        <button class="btn btn-sm btn-danger" data-del-client="${c.id}">Supprimer</button></td></tr>`).join('')}
+      </tbody></table>`}</div>`;
+}
+function bindClientList() {
+  $$('[data-del-client]').forEach(b => b.onclick = async () => {
+    if (!confirm('Supprimer ce client ?')) return;
+    await deleteClientById(b.dataset.delClient); toast('Client supprimé');
+  });
+}
+
+function renderClientEditor(id) {
+  const editing = id ? db.clients.find(c => c.id === id) : null;
+  const c = editing ? { ...editing } : { id: uid(), type: 'particulier', civility: '', firstName: '', lastName: '', companyName: '', siret: '', address: '', postalCode: '', city: '', country: 'France', email: '', phone: '' };
+  $('#main').innerHTML = `<div class="topbar"><h1>${editing ? 'Modifier le client' : 'Nouveau client'}</h1><a class="btn" href="#/clients">← Retour</a></div>
+    <div class="card">
+      <div class="form-row cols-3">
+        <div><label>Type</label><select id="cl-type"><option value="particulier" ${c.type==='particulier'?'selected':''}>Particulier</option><option value="pro" ${c.type==='pro'?'selected':''}>Professionnel</option></select></div>
+        <div><label>Civilité</label><select id="cl-civility"><option value="">—</option><option ${c.civility==='M.'?'selected':''}>M.</option><option ${c.civility==='Mme'?'selected':''}>Mme</option></select></div><div></div>
+      </div>
+      <div class="form-row"><div><label>Prénom</label><input id="cl-firstName" value="${escapeHtml(c.firstName)}"></div><div><label>Nom</label><input id="cl-lastName" value="${escapeHtml(c.lastName)}"></div></div>
+      <div class="form-row" id="cl-pro" style="display:${c.type==='pro'?'grid':'none'}"><div><label>Raison sociale</label><input id="cl-companyName" value="${escapeHtml(c.companyName)}"></div><div><label>SIRET</label><input id="cl-siret" value="${escapeHtml(c.siret)}"></div></div>
+      <div class="form-row cols-1"><div><label>Adresse</label><input id="cl-address" value="${escapeHtml(c.address)}"></div></div>
+      <div class="form-row cols-3"><div><label>Code postal</label><input id="cl-postalCode" value="${escapeHtml(c.postalCode)}"></div><div><label>Ville</label><input id="cl-city" value="${escapeHtml(c.city)}"></div><div><label>Pays</label><input id="cl-country" value="${escapeHtml(c.country)}"></div></div>
+      <div class="form-row"><div><label>Email</label><input type="email" id="cl-email" value="${escapeHtml(c.email)}"></div><div><label>Téléphone</label><input type="tel" id="cl-phone" value="${escapeHtml(c.phone)}"></div></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><a class="btn" href="#/clients">Annuler</a><button class="btn btn-primary" id="cl-save">${editing ? 'Enregistrer' : 'Créer le client'}</button></div>
+    </div>`;
+  $('#cl-type').onchange = (e) => { $('#cl-pro').style.display = e.target.value === 'pro' ? 'grid' : 'none'; };
+  $('#cl-save').onclick = async () => {
+    const data = { id: c.id, type: $('#cl-type').value, civility: $('#cl-civility').value,
+      firstName: $('#cl-firstName').value.trim(), lastName: $('#cl-lastName').value.trim(),
+      companyName: $('#cl-companyName').value.trim(), siret: $('#cl-siret').value.trim(),
+      address: $('#cl-address').value.trim(), postalCode: $('#cl-postalCode').value.trim(),
+      city: $('#cl-city').value.trim(), country: $('#cl-country').value.trim(),
+      email: $('#cl-email').value.trim(), phone: $('#cl-phone').value.trim() };
+    if (!clientName(data)) { alert('Le nom du client est obligatoire.'); return; }
+    await saveClient(data); navigate('clients'); toast('Client enregistré');
+  };
+}
+
+function renderServiceItemList() {
+  const cats = [...new Set(db.serviceItems.map(s => s.category || 'Général'))].sort();
+  return `<div class="topbar"><h1>📚 Bibliothèque de prestations</h1><a class="btn btn-primary" href="#/library/new">+ Nouvelle prestation</a></div>
+    <div class="card">
+      <p style="color:var(--muted);margin:0 0 12px">Créez vos prestations types pour les insérer en 1 clic dans vos devis.</p>
+      ${db.serviceItems.length === 0 ? `<div class="empty"><h3>Aucune prestation</h3><p>Ajoutez vos travaux les plus courants pour gagner du temps sur chaque devis.</p></div>` : cats.map(cat => `
+        <h3>${escapeHtml(cat)}</h3>
+        <table><thead><tr><th>Description</th><th>Unité</th><th>PU HT</th><th>TVA</th><th></th></tr></thead><tbody>
+        ${db.serviceItems.filter(s => (s.category||'Général')===cat).map(s => `
+          <tr>
+            <td><strong>${escapeHtml(s.name)}</strong>${s.description?`<br><small style="color:var(--muted)">${escapeHtml(s.description)}</small>`:''}</td>
+            <td>${escapeHtml(s.unit)}</td><td>${fmtMoney(s.unitPrice)}</td><td>${s.tva}%</td>
+            <td style="text-align:right"><a class="btn btn-sm" href="#/library/edit/${s.id}">Modifier</a>
+            <button class="btn btn-sm btn-danger" data-del-service="${s.id}">×</button></td>
+          </tr>`).join('')}
+        </tbody></table>
+      `).join('')}
+    </div>`;
+}
+function bindServiceItemList() {
+  $$('[data-del-service]').forEach(b => b.onclick = async () => {
+    if (!confirm('Supprimer cette prestation ? Les devis existants ne seront pas modifiés.')) return;
+    await deleteServiceItem(b.dataset.delService); toast('Prestation supprimée');
+  });
+}
+function renderServiceItemEditor(id) {
+  const editing = id ? db.serviceItems.find(s => s.id === id) : null;
+  const s = editing ? {...editing} : { id: uid(), name: '', description: '', category: '', unit: 'forfait', unitPrice: 0, tva: db.company.tvaRegime==='franchise'?0:20 };
+  $('#main').innerHTML = `<div class="topbar"><h1>${editing?'Modifier':'Nouvelle'} prestation</h1><a class="btn" href="#/library">← Retour</a></div>
+    <div class="card">
+      <div class="form-row cols-1"><div><label>Nom (visible dans la sélection)</label><input id="si-name" value="${escapeHtml(s.name)}" placeholder="ex. Arrachage haie moyenne (par ml)"></div></div>
+      <div class="form-row"><div><label>Catégorie</label><input id="si-category" value="${escapeHtml(s.category||'')}" placeholder="ex. Terrassement, Espaces verts, Clôture..." list="cat-list"><datalist id="cat-list">${[...new Set(db.serviceItems.map(i=>i.category).filter(Boolean))].map(c=>`<option value="${escapeHtml(c)}">`).join('')}</datalist></div><div><label>Unité par défaut</label><select id="si-unit">${['forfait','h','jour','m²','ml','m³','u','kg'].map(u=>`<option value="${u}" ${u===s.unit?'selected':''}>${u}</option>`).join('')}</select></div></div>
+      <div class="form-row"><div><label>Prix unitaire HT</label><input type="number" step="0.01" id="si-unitPrice" value="${s.unitPrice}"></div><div><label>TVA %</label><select id="si-tva">${[0,5.5,10,20].map(v=>`<option value="${v}" ${Number(s.tva)===v?'selected':''}>${v}%</option>`).join('')}</select></div></div>
+      <div class="form-row cols-1"><div><label>Description détaillée (optionnelle, sera pré-remplie dans la ligne du devis)</label><textarea id="si-description" rows="3" placeholder="ex. Coupe, dessouchage et évacuation des végétaux">${escapeHtml(s.description||'')}</textarea></div></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><a class="btn" href="#/library">Annuler</a><button class="btn btn-primary" id="si-save">${editing?'Enregistrer':'Créer'}</button></div>
+    </div>`;
+  $('#si-save').onclick = async () => {
+    const data = { id: s.id, name: $('#si-name').value.trim(), description: $('#si-description').value.trim(), category: $('#si-category').value.trim()||'Général', unit: $('#si-unit').value, unitPrice: Number($('#si-unitPrice').value), tva: Number($('#si-tva').value) };
+    if (!data.name) { alert('Le nom est obligatoire'); return; }
+    await saveServiceItem(data); navigate('library'); toast('Prestation enregistrée');
+  };
+}
+
+function docCollection(kind) { return kind === 'quote' ? db.quotes : db.invoices; }
+function docRoute(kind) { return kind === 'quote' ? 'devis' : 'factures'; }
+function docLabel(kind, plural) { return kind === 'quote' ? (plural?'Devis':'devis') : (plural?'Factures':'facture'); }
+function statusBadge(status, kind) {
+  const map = kind === 'quote' ? { draft:['Brouillon','badge-draft'], sent:['Envoyé','badge-sent'], accepted:['Accepté','badge-accepted'], refused:['Refusé','badge-refused'] } : { draft:['Brouillon','badge-draft'], sent:['Envoyé','badge-sent'], paid:['Payé','badge-paid'], overdue:['En retard','badge-overdue'] };
+  const [label, cls] = map[status] || ['—','badge-draft'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function renderDocList(kind) {
+  const items = docCollection(kind), route = docRoute(kind);
+  return `<div class="topbar"><h1>${docLabel(kind, true)}</h1><a class="btn btn-primary" href="#/${route}/new">+ ${kind==='quote'?'Nouveau devis':'Nouvelle facture'}</a></div>
+    <div class="card">${items.length === 0 ? `<div class="empty"><h3>Aucun ${docLabel(kind)}</h3><p>Créez-en un pour démarrer.</p></div>` : `
+      <table><thead><tr><th>Numéro</th><th>Client</th><th>Date</th><th>Total HT</th><th>Total TTC</th><th>Statut</th><th></th></tr></thead><tbody>
+      ${items.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(d => `<tr class="clickable" onclick="navigate('${route}/view/${d.id}')">
+        <td><strong>${escapeHtml(d.number||'—')}</strong></td><td>${escapeHtml(clientName(clientById(d.clientId)))}</td><td>${fmtDate(d.date)}</td>
+        <td>${fmtMoney(calcDoc(d).ht)}</td><td>${fmtMoney(calcDoc(d).ttc)}</td><td>${statusBadge(d.status, kind)}</td>
+        <td style="text-align:right" onclick="event.stopPropagation()"><a class="btn btn-sm" href="#/${route}/edit/${d.id}">Modifier</a>
+        <button class="btn btn-sm btn-danger" data-del-doc="${d.id}" data-kind="${kind}">×</button></td></tr>`).join('')}</tbody></table>`}</div>`;
+}
+function bindDocList(kind) {
+  $$('[data-del-doc]').forEach(b => b.onclick = async (e) => { e.stopPropagation();
+    if (!confirm('Supprimer ce document ?')) return;
+    await deleteDocById(b.dataset.delDoc, b.dataset.kind); toast('Document supprimé');
+  });
+}
+
+function newLine() { return { id: uid(), description: '', quantity: 1, unit: 'forfait', unitPrice: 0, tva: db.company.tvaRegime === 'franchise' ? 0 : 20 }; }
+function newDoc(kind) {
+  const isQuote = kind === 'quote';
+  const numField = isQuote ? 'nextQuoteNum' : 'nextInvoiceNum';
+  const prefix = isQuote ? db.company.quotePrefix : db.company.invoicePrefix;
+  const number = `${prefix}-${new Date().getFullYear()}-${String(db.company[numField]||1).padStart(3,'0')}`;
+  return { id: uid(), number, date: today(), validityDays: isQuote ? 30 : null,
+    dueDate: isQuote ? null : addDays(today(), 30), clientId: '', object: '',
+    lines: [ newLine() ], deposit: isQuote ? 0 : null,
+    conditions: db.company.defaultNotes || (db.company.tvaRegime === 'franchise' ? 'TVA non applicable, art. 293 B du CGI.' : ''),
+    exclusions: db.company.defaultExclusions || '',
+    status: 'draft', sourceQuoteId: null };
+}
+
+function renderQuoteEditor(id, kind) {
+  const collection = docCollection(kind), route = docRoute(kind);
+  const isQuote = kind === 'quote';
+  const editing = id ? collection.find(d => d.id === id) : null;
+  let doc = editing ? structuredClone(editing) : newDoc(kind);
+  const main = $('#main');
+  function paint() {
+    const totals = calcDoc(doc);
+    main.innerHTML = `<div class="topbar"><h1>${editing ? 'Modifier' : 'Créer'} ${isQuote?'un devis':'une facture'}</h1>
+      <div class="actions"><a class="btn" href="#/${route}">← Annuler</a><button class="btn btn-primary" id="doc-save">Enregistrer</button></div></div>
+      <div class="card"><h3>Informations générales</h3>
+        <div class="form-row cols-3">
+          <div><label>Numéro</label><input id="doc-number" value="${escapeHtml(doc.number)}"></div>
+          <div><label>Date d'émission</label><input type="date" id="doc-date" value="${doc.date||''}"></div>
+          ${isQuote ? `<div><label>Validité (jours)</label><input type="number" id="doc-validity" value="${doc.validityDays||30}"></div>` : `<div><label>Date d'échéance</label><input type="date" id="doc-due" value="${doc.dueDate||''}"></div>`}
+        </div>
+        <div class="form-row cols-1"><div><label>Objet du document</label><input id="doc-object" placeholder="ex. Travaux paysagers — arrachage de haie" value="${escapeHtml(doc.object||'')}"></div></div>
+        <h3>Client</h3>
+        <div class="form-row cols-1"><div><label>Sélectionner un client</label>
+          <div style="display:flex;gap:8px"><select id="doc-client" style="flex:1"><option value="">— choisir —</option>
+          ${db.clients.map(c => `<option value="${c.id}" ${c.id===doc.clientId?'selected':''}>${escapeHtml(clientName(c))}${c.city?' — '+escapeHtml(c.city):''}</option>`).join('')}
+          </select><a class="btn" href="#/clients/new">+ Nouveau</a></div></div></div>
+        <h3>Lignes</h3>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Astuce : 1ʳᵉ ligne de la description = titre, lignes suivantes = sous-titre gris.</p>
+        ${db.serviceItems.length ? `<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;background:rgba(59,130,246,.07);padding:10px;border-radius:6px;border:1px solid rgba(59,130,246,.25)">
+          <span style="font-size:13px">📚 Insérer depuis la bibliothèque :</span>
+          <select id="insert-service" style="flex:1;max-width:400px"><option value="">— choisir une prestation —</option>
+          ${db.serviceItems.slice().sort((a,b)=>(a.category||'').localeCompare(b.category||'')||a.name.localeCompare(b.name)).map(s=>`<option value="${s.id}">${escapeHtml(s.category||'Général')} — ${escapeHtml(s.name)} (${fmtMoney(s.unitPrice)}/${escapeHtml(s.unit)})</option>`).join('')}</select>
+          <button class="btn btn-sm btn-primary" id="btn-insert-service" type="button">+ Insérer</button>
+        </div>` : `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">💡 Créez des <a href="#/library" style="color:var(--accent)">prestations réutilisables</a> pour gagner du temps.</div>`}
+        <table class="lines-table"><thead><tr><th class="col-desc">Description</th><th class="col-num">Qté</th><th class="col-num">Unité</th><th class="col-num">PU HT</th><th class="col-tva">TVA %</th><th class="col-total">Total HT</th><th class="col-actions"></th></tr></thead><tbody>
+        ${doc.lines.map((l, i) => `<tr data-line="${i}">
+          <td><textarea data-f="description" rows="2" placeholder="Titre&#10;Détails / sous-titre">${escapeHtml(l.description)}</textarea></td>
+          <td><input data-f="quantity" type="number" step="0.01" value="${l.quantity}"></td>
+          <td><select data-f="unit">${['forfait','h','jour','m²','ml','m³','u','kg'].map(u => `<option value="${u}" ${u===l.unit?'selected':''}>${u}</option>`).join('')}</select></td>
+          <td><input data-f="unitPrice" type="number" step="0.01" value="${l.unitPrice}"></td>
+          <td><select data-f="tva">${[0,5.5,10,20].map(v => `<option value="${v}" ${Number(l.tva)===v?'selected':''}>${v}%</option>`).join('')}</select></td>
+          <td class="col-total" data-total-line="${i}">${fmtMoney(calcLine(l).ht)}</td>
+          <td><button class="btn btn-sm btn-ghost btn-danger" data-del-line="${i}">×</button></td></tr>`).join('')}
+        </tbody></table>
+        <button class="btn btn-sm" id="add-line" style="margin-top:8px">+ Ajouter une ligne</button>
+        <div style="margin-top:18px;display:flex;justify-content:flex-end"><div style="min-width:280px">
+          <div class="total-row"><span>Total HT</span><strong id="sum-ht">${fmtMoney(totals.ht)}</strong></div>
+          <div class="total-row"><span>Total TVA</span><strong id="sum-tva">${fmtMoney(totals.tva)}</strong></div>
+          <div class="total-row grand"><span>Total TTC</span><strong id="sum-ttc">${fmtMoney(totals.ttc)}</strong></div>
+          ${isQuote ? `<div style="margin-top:10px"><label>Acompte (%)</label><input type="number" id="doc-deposit" value="${doc.deposit||0}" style="width:80px"></div>
+          <div class="total-row"><span>Acompte</span><strong id="sum-deposit">${fmtMoney(totals.ttc * (Number(doc.deposit)||0)/100)}</strong></div>` : ''}
+        </div></div>
+        <h3>Notes (affichées sur le devis)</h3>
+        <div class="form-row cols-1"><div><textarea id="doc-conditions" rows="4" placeholder="ex. Ce devis est établi pour des prestations de main-d'œuvre uniquement. Tous les matériaux sont à la charge du client.">${escapeHtml(doc.conditions||'')}</textarea></div></div>
+
+        <h3>Prestations exclues (protection juridique)</h3>
+        <div class="form-row cols-1"><div><textarea id="doc-exclusions" rows="4" placeholder="ex. – Étanchéité&#10;– Isolation&#10;– Revêtements (carrelage, résine, enrobé, etc.)">${escapeHtml(doc.exclusions||'')}</textarea><div style="font-size:12px;color:var(--muted);margin-top:4px">Pré-rempli depuis Paramètres → Mentions par défaut. Modifiable devis par devis.</div></div></div>
+        <h3>Statut</h3>
+        <div class="form-row"><div><label>Statut</label><select id="doc-status">
+          ${(isQuote ? [['draft','Brouillon'],['sent','Envoyé'],['accepted','Accepté'],['refused','Refusé']] : [['draft','Brouillon'],['sent','Envoyé'],['paid','Payé'],['overdue','En retard']]).map(([v,l]) => `<option value="${v}" ${v===doc.status?'selected':''}>${l}</option>`).join('')}
+        </select></div><div></div></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><a class="btn" href="#/${route}">Annuler</a><button class="btn btn-primary" id="doc-save-2">Enregistrer</button></div>`;
+
+    $$('tr[data-line]').forEach(tr => {
+      const i = +tr.dataset.line;
+      $$('[data-f]', tr).forEach(inp => {
+        const applyValue = () => {
+          const f = inp.dataset.f;
+          doc.lines[i][f] = (f === 'quantity' || f === 'unitPrice' || f === 'tva') ? Number(inp.value) : inp.value;
+          refreshTotals();
+        };
+        inp.oninput = applyValue;
+        inp.onchange = applyValue;
+      });
+      $('[data-del-line]', tr).onclick = () => { doc.lines.splice(i,1); if (!doc.lines.length) doc.lines.push(newLine()); paint(); };
+    });
+    function refreshTotals() {
+      // Mise à jour ciblée : ne touche jamais aux champs de saisie (pas de perte de focus)
+      doc.lines.forEach((l, idx) => {
+        const cell = main.querySelector(`[data-total-line="${idx}"]`);
+        if (cell) cell.textContent = fmtMoney(calcLine(l).ht);
+      });
+      const t = calcDoc(doc);
+      const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+      setTxt('sum-ht', fmtMoney(t.ht));
+      setTxt('sum-tva', fmtMoney(t.tva));
+      setTxt('sum-ttc', fmtMoney(t.ttc));
+      setTxt('sum-deposit', fmtMoney(t.ttc * (Number(doc.deposit)||0) / 100));
+    }
+
+    $('#add-line').onclick = () => { doc.lines.push(newLine()); paint(); };
+    const insertBtn = document.getElementById('btn-insert-service');
+    if (insertBtn) insertBtn.onclick = () => {
+      const sel = document.getElementById('insert-service');
+      const item = db.serviceItems.find(s => s.id === sel.value);
+      if (!item) { alert('Sélectionnez une prestation'); return; }
+      // If the last line is empty, replace it; otherwise add a new line
+      const last = doc.lines[doc.lines.length-1];
+      const isEmpty = !last.description && !last.unitPrice;
+      const newL = { id: uid(), description: item.name + (item.description?`\n${item.description}`:''), quantity: 1, unit: item.unit, unitPrice: item.unitPrice, tva: item.tva };
+      if (isEmpty) doc.lines[doc.lines.length-1] = newL; else doc.lines.push(newL);
+      sel.value = ''; paint();
+    };
+    if ($('#doc-deposit')) {
+      const depInput = $('#doc-deposit');
+      const applyDep = () => { doc.deposit = Number(depInput.value); refreshTotals(); };
+      depInput.oninput = applyDep;
+      depInput.onchange = applyDep;
+    }
+
+    const saveFn = async () => {
+      doc.number = $('#doc-number').value.trim(); doc.date = $('#doc-date').value;
+      if (isQuote) doc.validityDays = Number($('#doc-validity').value)||30;
+      else doc.dueDate = $('#doc-due').value;
+      doc.object = $('#doc-object').value.trim(); doc.clientId = $('#doc-client').value;
+      doc.conditions = $('#doc-conditions').value; doc.exclusions = $('#doc-exclusions').value; doc.status = $('#doc-status').value;
+      if (!doc.clientId) { alert('Sélectionnez un client.'); return; }
+      if (!doc.lines.length || !doc.lines.some(l => Number(l.unitPrice) > 0 || l.description.trim())) { alert('Ajoutez au moins une ligne.'); return; }
+      await saveDoc(doc, kind);
+      if (!editing) { db.company[isQuote ? 'nextQuoteNum' : 'nextInvoiceNum'] = (Number(db.company[isQuote ? 'nextQuoteNum' : 'nextInvoiceNum'])||1) + 1; await saveCompany(); }
+      navigate(`${route}/view/${doc.id}`); toast('Enregistré');
+    };
+    $('#doc-save').onclick = saveFn; $('#doc-save-2').onclick = saveFn;
+  }
+  paint();
+}
+
+function renderQuoteView(id, kind) {
+  const collection = docCollection(kind), route = docRoute(kind), isQuote = kind === 'quote';
+  const doc = collection.find(d => d.id === id);
+  if (!doc) { $('#main').innerHTML = `<div class="card empty"><h3>Document introuvable</h3></div>`; return; }
+  const client = clientById(doc.clientId), totals = calcDoc(doc);
+  $('#main').innerHTML = `<div class="topbar"><h1>${isQuote?'Devis':'Facture'} ${escapeHtml(doc.number)}</h1>
+    <div class="actions"><a class="btn" href="#/${route}">← Retour</a><a class="btn" href="#/${route}/edit/${doc.id}">Modifier</a>
+    ${isQuote ? `<button class="btn" id="btn-share">🔗 Lien public / e-signature</button>` : ''}
+    ${isQuote && doc.status === 'accepted' && !db.invoices.find(i => i.sourceQuoteId === doc.id && i.isDeposit) ? `<button class="btn" id="btn-deposit">💸 Générer facture acompte</button>` : ''}
+    ${!isQuote && doc.status !== 'paid' ? `<button class="btn" id="btn-markpaid" style="background:var(--success);color:#fff;border-color:var(--success)">✓ Marquer comme payée</button>` : ''}
+    <button class="btn btn-primary" id="btn-print">⎙ Imprimer / PDF</button></div></div>
+    <div class="card"><div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div><div style="font-size:12px;color:var(--muted);text-transform:uppercase">Client</div>
+      <div style="font-weight:700;font-size:16px;margin:4px 0">${escapeHtml(clientName(client))}</div>
+      <div style="color:var(--muted);font-size:13px">${nl2br(formatClientAddress(client))}</div></div>
+      <div><div style="font-size:12px;color:var(--muted);text-transform:uppercase">Détails</div>
+      <div style="margin-top:4px">Date : ${fmtDate(doc.date)}</div>
+      ${isQuote ? `<div>Validité : ${doc.validityDays||30} jours</div>` : `<div>Échéance : ${fmtDate(doc.dueDate)}</div>`}
+      <div>Statut : ${statusBadge(doc.status, kind)}</div>
+      ${doc.signature ? `<div style="margin-top:8px;padding:6px 10px;background:rgba(34,197,94,.15);color:#22c55e;border-radius:4px;font-size:12px">✍️ Signé par <strong>${escapeHtml(doc.signature.signedBy)}</strong> le ${fmtDate(doc.signature.signedAt)}</div>` : ''}
+      </div>
+    </div>${doc.object ? `<div style="margin-top:18px"><strong>Objet :</strong> ${escapeHtml(doc.object)}</div>` : ''}</div>
+    <div class="card"><table><thead><tr><th>Description</th><th>Qté</th><th>Unité</th><th>PU HT</th><th>TVA</th><th style="text-align:right">Total HT</th></tr></thead><tbody>
+    ${doc.lines.map(l => `<tr><td>${nl2br(l.description)}</td><td>${l.quantity}</td><td>${escapeHtml(l.unit)}</td><td>${fmtMoney(l.unitPrice)}</td><td>${l.tva}%</td><td style="text-align:right"><strong>${fmtMoney(calcLine(l).ht)}</strong></td></tr>`).join('')}
+    </tbody></table>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px"><div style="min-width:280px">
+      <div class="total-row"><span>Total HT</span><strong>${fmtMoney(totals.ht)}</strong></div>
+      <div class="total-row"><span>Total TVA</span><strong>${fmtMoney(totals.tva)}</strong></div>
+      <div class="total-row grand"><span>Total TTC</span><strong>${fmtMoney(totals.ttc)}</strong></div></div></div>
+    ${doc.conditions ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)"><h3>Conditions</h3><div style="white-space:pre-wrap">${escapeHtml(doc.conditions)}</div></div>` : ''}</div>`;
+  $('#btn-print').onclick = () => { renderPrintView(doc, kind); window.print(); };
+  if ($('#btn-share')) $('#btn-share').onclick = async () => {
+    const url = await publishPublicQuote(doc);
+    await navigator.clipboard.writeText(url);
+    toast('Lien public copié — vous pouvez l\'envoyer au client');
+  };
+  if ($('#btn-deposit')) $('#btn-deposit').onclick = async () => {
+    if (!confirm('Créer une facture d\'acompte 30% pour ce devis ?')) return;
+    await createDepositInvoice(doc);
+  };
+  if ($('#btn-markpaid')) $('#btn-markpaid').onclick = async () => {
+    const updated = { ...doc, status: 'paid', paidAt: today() };
+    await saveDoc(updated, kind);
+    toast('Facture marquée comme payée');
+  };
+}
+
+function formatCgvBody(text) {
+  let s = escapeHtml(text);
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
+function renderPrintView(doc, kind) {
+  const isQuote = kind === 'quote', co = db.company, client = clientById(doc.clientId), totals = calcDoc(doc);
+  const validityUntil = isQuote ? addDays(doc.date, doc.validityDays||30) : null;
+  const tvaMention = co.tvaRegime === 'franchise' ? 'TVA non applicable, art. 293 B du CGI' : '';
+  const depositPct = Number(doc.deposit) || 0;
+  const depositAmount = totals.ttc * depositPct / 100;
+
+  /* Header émetteur : nom, adresse, tel, email, siret, ape */
+  const coLines = [
+    [co.address, [co.postalCode, co.city].filter(Boolean).join(' ')].filter(Boolean).join(' '),
+    co.phone,
+    co.email,
+    co.website,
+    co.siret ? 'SIRET : ' + co.siret : '',
+    co.ape ? 'NAF ' + co.ape : ''
+  ].filter(Boolean);
+
+  /* Client : contact / adresse / tel / email */
+  const clientRows = client ? [
+    ['Nom du contact', clientName(client)],
+    client.type === 'pro' && client.companyName ? ['Entreprise cliente', client.companyName] : null,
+    ['Adresse', [client.address, [client.postalCode, client.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')],
+    client.phone ? ['Téléphone', client.phone] : null,
+    client.email ? ['E-mail', client.email] : null,
+  ].filter(Boolean) : [];
+
+  const docTitle = isQuote ? 'DEVIS' : 'FACTURE';
+  const titleLine = doc.object ? doc.object : (isQuote ? 'Devis de travaux' : 'Facture de travaux');
+
+  $('#print').innerHTML = `
+    <div class="bp-page1">
+    <!-- ============ HEADER ============ -->
+    <div class="bp-header">
+      <div class="bp-header-left">
+        ${co.logo ? `<img class="bp-logo" src="${co.logo}">` : ''}
+        <div class="bp-co-info">
+          <div class="bp-co-name">${escapeHtml([co.legalForm, co.name].filter(Boolean).join(' '))}</div>
+          ${coLines.map(l => `<div>${escapeHtml(l)}</div>`).join('')}
+        </div>
+      </div>
+      <div class="bp-header-right">
+        <table class="bp-meta">
+          <tr><td class="bp-meta-lbl">En date du</td><td>${fmtDate(doc.date)}</td></tr>
+          ${isQuote
+            ? `<tr><td class="bp-meta-lbl">Valable jusqu'au</td><td>${fmtDate(validityUntil)}</td></tr>`
+            : `<tr><td class="bp-meta-lbl">Échéance</td><td>${fmtDate(doc.dueDate)}</td></tr>`}
+          <tr><td class="bp-meta-lbl">N° DE ${isQuote?'DEVIS':'FACTURE'}</td><td>${escapeHtml(doc.number||'')}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ TITRE ============ -->
+    <div style="padding-left:10pt;border-left:4pt solid var(--bp-amber);margin:4pt 0 16pt">
+      <div style="font-size:8pt;font-weight:700;color:var(--bp-amber-dark);text-transform:uppercase;letter-spacing:.12em;margin-bottom:2pt">${docTitle} ${escapeHtml(doc.number||'')}</div>
+      <div style="font-size:15pt;font-weight:800;color:var(--bp-dark);letter-spacing:-0.02em">${escapeHtml(titleLine)}</div>
+    </div>
+
+    <!-- ============ CLIENT ============ -->
+    <table class="bp-client">
+      ${clientRows.map(([lbl, val]) => `<tr><td class="bp-client-lbl">${escapeHtml(lbl)}</td><td>${escapeHtml(val)}</td></tr>`).join('')}
+    </table>
+
+    <!-- ============ TABLEAU LIGNES ============ -->
+    <table class="bp-lines">
+      <thead><tr>
+        <th style="width:50%">DESCRIPTION</th>
+        <th style="width:10%">U</th>
+        <th style="width:10%">QTÉ</th>
+        <th style="width:15%">PRIX UNITAIRE</th>
+        <th style="width:15%">TOTAL</th>
+      </tr></thead>
+      <tbody>
+        ${doc.lines.map((l, i) => {
+          const parts = String(l.description||'').split(/\n/);
+          let title = parts[0] || '';
+          const sub = parts.slice(1).join(' ').trim();
+          if (!/^\d+\.\s/.test(title)) title = `${i+1}. ${title}`;
+          return `<tr>
+            <td class="bp-desc">${escapeHtml(title)}${sub ? ', ' + escapeHtml(sub) : ''}</td>
+            <td class="bp-c">${escapeHtml(l.unit)}</td>
+            <td class="bp-c">${l.quantity}</td>
+            <td class="bp-r">${fmtMoney(l.unitPrice)}</td>
+            <td class="bp-r">${fmtMoney(calcLine(l).ht)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+
+    <!-- ============ BLOC BAS : gauche (assurance/notes) + droite (totaux) ============ -->
+    <div class="bp-bottom">
+      <div class="bp-bottom-left">
+        ${(co.decennale || co.rcpro) ? `
+        <div class="bp-block">
+          ${co.decennale ? `<div><strong>Assureur :</strong> ${escapeHtml(co.decennale)}</div>` : ''}
+          ${co.insuranceContract ? `<div><strong>N° de contrat :</strong> ${escapeHtml(co.insuranceContract)}</div>` : ''}
+          <div><strong>Garantie :</strong> Responsabilité Civile Décennale et Responsabilité Civile Professionnelle</div>
+          ${co.rcpro ? `<div><strong>RC Pro :</strong> ${escapeHtml(co.rcpro)}</div>` : ''}
+          <div><strong>Zone de couverture :</strong> France Métropolitaine</div>
+          ${co.insuredActivity ? `<div style="margin-top:4pt">Les travaux sont réalisés dans le strict cadre de l'activité « ${escapeHtml(co.insuredActivity)} » déclarée à l'assurance décennale de l'entreprise.</div>` : ''}
+        </div>` : ''}
+
+        ${doc.conditions ? `
+        <div class="bp-block">
+          <div class="bp-block-title">Notes</div>
+          <div style="white-space:pre-wrap">${escapeHtml(doc.conditions)}</div>
+        </div>` : ''}
+
+        ${(doc.exclusions || co.defaultExclusions) ? `
+        <div class="bp-block">
+          <div class="bp-block-title">Prestations exclues du présent devis</div>
+          <div style="white-space:pre-wrap">${escapeHtml(doc.exclusions || co.defaultExclusions)}</div>
+        </div>` : ''}
+
+        ${(co.iban || co.paymentTerms || co.latePenalties) ? `
+        <div class="bp-block">
+          <div class="bp-block-title">Instructions de paiement</div>
+          ${co.paymentTerms ? `<div style="white-space:pre-wrap">${escapeHtml(co.paymentTerms)}</div>` : ''}
+          ${co.iban ? `<div style="margin-top:3pt">IBAN : ${escapeHtml(co.iban)}${co.bic?' — BIC : '+escapeHtml(co.bic):''}</div>` : ''}
+          ${co.latePenalties ? `<div style="margin-top:4pt;white-space:pre-wrap">${escapeHtml(co.latePenalties)}</div>` : ''}
+        </div>` : ''}
+      </div>
+
+      <div class="bp-bottom-right">
+        <table class="bp-totals">
+          <tr><td class="bp-tot-lbl">TOTAL NET HT</td><td class="bp-tot-val">${fmtMoney(totals.ht)}</td></tr>
+          ${totals.tva > 0 ? `<tr><td class="bp-tot-lbl">TVA</td><td class="bp-tot-val">${fmtMoney(totals.tva)}</td></tr>` : ''}
+          ${tvaMention ? `<tr><td colspan="2" class="bp-tva-note">${escapeHtml(tvaMention)}</td></tr>` : ''}
+          ${isQuote && depositPct > 0 ? `<tr><td class="bp-tot-lbl">Acompte ${depositPct}%</td><td class="bp-tot-val">${fmtMoney(depositAmount)}</td></tr>` : ''}
+        </table>
+        <div class="bp-net">
+          <span class="bp-net-lbl">NET À PAYER</span>
+          <span class="bp-net-val">${fmtMoney(totals.ttc)}</span>
+        </div>
+        ${isQuote ? `
+        <div class="bp-sign-box">
+          Mention « Reçu avant l'exécution des travaux, bon pour accord », date et signature
+          ${doc.signature ? `<div style="margin-top:8pt;font-style:italic;color:#1f3864">Signé électroniquement par ${escapeHtml(doc.signature.signedBy)}<br>le ${fmtDate(doc.signature.signedAt)}</div>` : '<div style="height:46pt"></div>'}
+        </div>` : ''}
+      </div>
+    </div>
+
+    </div>
+
+    <!-- ============ CGV (page suivante) ============ -->
+    ${co.cgv ? `<div class="print-cgv"><h2>Conditions Générales de Vente et de Travaux</h2><div class="print-cgv-body">${formatCgvBody(co.cgv)}</div></div>` : ''}`;
+
+  paginatePrintView();
+}
+
+/* Pagination dynamique : cale chaque section sur une page entière et pose un pied de page en bas de chaque page */
+function paginatePrintView() {
+  const el = document.getElementById('print');
+  if (!el) return;
+  const co = db.company || {};
+  el.querySelectorAll('.bp-footer-dyn').forEach(n => n.remove());
+
+  const page1 = el.querySelector('.bp-page1');
+  const cgv = el.querySelector('.print-cgv');
+  if (page1) page1.style.minHeight = '';
+  if (cgv) cgv.style.minHeight = '';
+
+  // Mesure px/mm
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:absolute;left:-9999px;top:0;width:100mm;height:0;visibility:hidden';
+  document.body.appendChild(probe);
+  const pxPerMm = probe.offsetWidth / 100 || 3.7795;
+  probe.remove();
+
+  const pageH = 267 * pxPerMm;   // zone imprimable A4 (297 - 14 - 16)
+  const contentW = 180 * pxPerMm; // largeur utile (210 - 15 - 15)
+
+  // Layout temporaire hors écran à la largeur A4 pour mesurer
+  const saved = el.getAttribute('style') || '';
+  el.setAttribute('style', 'display:block;position:absolute;left:-10000px;top:0;width:' + contentW + 'px;background:#fff;visibility:hidden;');
+
+  const devisH = cgv ? cgv.offsetTop : el.scrollHeight;
+  const pagesDevis = Math.max(1, Math.ceil((devisH - 2) / pageH));
+  if (page1) page1.style.minHeight = (pagesDevis * pageH) + 'px';
+
+  let pagesCgv = 0;
+  if (cgv) {
+    const cgvH = cgv.scrollHeight;
+    pagesCgv = Math.max(1, Math.ceil((cgvH - 2) / pageH));
+    cgv.style.minHeight = (pagesCgv * pageH) + 'px';
+  }
+
+  const total = pagesDevis + pagesCgv;
+  const legal = [co.legalForm, co.name].filter(Boolean).join(' ') + (co.siret ? ' — SIRET ' + co.siret : '');
+
+  for (let i = 0; i < total; i++) {
+    const f = document.createElement('div');
+    f.className = 'bp-footer bp-footer-dyn';
+    f.style.top = ((i + 1) * pageH - 9 * pxPerMm) + 'px';
+    f.innerHTML = '<span>' + escapeHtml(legal) + '</span><span>Page ' + (i + 1) + '/' + total + '</span>';
+    el.appendChild(f);
+  }
+
+  el.setAttribute('style', saved);
+}
+
+
+
+function defaultCgvTemplate() {
+  const co = db.company || {};
+  const entName = co.name || '[votre entreprise]';
+  return `CONDITIONS GÉNÉRALES DE VENTE ET DE TRAVAUX
+
+Les présentes conditions générales régissent l'ensemble des prestations réalisées par ${entName}. Elles prévalent sur tout autre document du Client. La signature du devis emporte acceptation des présentes.
+
+**1 – FORMATION DU CONTRAT**
+Notre devis reste valable trente (30) jours à compter de sa date d'émission, sauf mention contraire. Il doit être signé du Client, précédé de la mention manuscrite « Bon pour accord », pour former contrat.
+
+**2 – INFORMATION PRÉCONTRACTUELLE**
+Le Client reconnaît avoir reçu, préalablement à la conclusion du contrat, toutes les informations prévues à l'article L.221-5 du Code de la consommation : caractéristiques essentielles de la prestation, prix, délai d'exécution, coordonnées de notre entreprise, garanties légales, modalités de règlement des litiges.
+
+**3 – PROPRIÉTÉ INTELLECTUELLE**
+Les devis, plans, croquis et études réalisés par notre entreprise demeurent notre propriété intellectuelle. Ils ne peuvent être communiqués à des tiers ni utilisés sans notre autorisation écrite.
+
+**4 – EXÉCUTION DES TRAVAUX**
+Les travaux sont réalisés aux jours et heures ouvrables. Le Client assure l'accessibilité du chantier et fournit l'eau et l'électricité nécessaires. Les délais mentionnés au devis sont indicatifs ; ils peuvent être prolongés en cas d'intempéries, de force majeure (article 1218 du Code civil) ou de retard imputable au Client ou à un tiers.
+
+**5 – MODIFICATIONS EN COURS DE TRAVAUX**
+Toute prestation supplémentaire non prévue au devis initial fera l'objet d'un devis complémentaire signé du Client avant exécution. En cas d'urgence justifiée, un accord verbal pourra intervenir, confirmé par écrit dès que possible.
+
+**6 – PRIX**
+Les prix sont exprimés en euros. Notre entreprise étant soumise à la franchise en base de TVA (article 293 B du CGI), la TVA n'est pas applicable. Les prix sont fermes pendant la durée de validité du devis.
+
+**7 – ACOMPTE ET ÉCHÉANCIER DE PAIEMENT**
+Sauf mention contraire au devis, le paiement s'effectue en trois échéances : 30 % du montant total à la signature du devis (acompte de commande) ; 40 % à mi-chantier ; 30 % (solde) à la réception des travaux. Les règlements s'effectuent par virement bancaire ou chèque à l'ordre de ${entName}. Chaque échéance fait l'objet d'une facture.
+
+**8 – RETARD DE PAIEMENT**
+En cas de défaut de paiement à l'échéance, des pénalités de retard calculées au taux d'intérêt légal en vigueur, majorées de 10 points, seront appliquées de plein droit, conformément à l'article L.441-10 du Code de commerce. Pour les Clients professionnels, une indemnité forfaitaire de recouvrement de 40 € sera également due.
+
+**9 – RÉCEPTION DES TRAVAUX**
+La réception des travaux est effectuée en présence du Client, par la signature d'un procès-verbal ou, à défaut, par la prise de possession de l'ouvrage. Toute réserve doit être formulée par écrit dans un délai de 8 jours suivant la réception.
+
+**10 – GARANTIES LÉGALES**
+Nos prestations sont couvertes par les garanties légales prévues au Code civil et au Code de la consommation : garantie de parfait achèvement (1 an, article 1792-6), garantie de bon fonctionnement (2 ans, article 1792-3), garantie décennale (10 ans, article 1792) pour les travaux qui en relèvent. Une attestation d'assurance décennale peut être fournie sur demande.
+
+**11 – RESPONSABILITÉ DU CLIENT**
+Le Client s'engage à informer notre entreprise, lors de l'établissement du devis, de tous éléments susceptibles d'influencer la réalisation des travaux : présence de réseaux enterrés, servitudes, autorisations administratives requises, particularités du terrain. À défaut, notre responsabilité ne saurait être engagée pour des désordres résultant d'une information incomplète.
+
+**12 – DÉCHETS**
+Sauf mention contraire au devis, l'évacuation des déchets issus des travaux est comprise dans notre prestation et acheminée vers les filières de valorisation agréées.
+
+**13 – DONNÉES PERSONNELLES**
+Les données personnelles collectées (nom, adresse, coordonnées) sont traitées uniquement pour la gestion de la relation contractuelle. Le Client dispose d'un droit d'accès, de rectification et de suppression, exerçable à l'adresse indiquée sur le devis.
+
+**14 – DROIT DE RÉTRACTATION**
+Pour les contrats conclus à distance ou hors établissement, le Client consommateur dispose d'un délai de rétractation de 14 jours à compter de la signature du devis (articles L.221-18 et suivants du Code de la consommation), sauf s'il demande expressément l'exécution des travaux avant la fin de ce délai.
+
+**15 – MÉDIATION DE LA CONSOMMATION**
+En cas de litige, le Client consommateur peut recourir gratuitement au service de médiation prévu à l'article L.612-1 du Code de la consommation.
+
+**16 – JURIDICTION COMPÉTENTE**
+Tout litige relatif à l'exécution ou à l'interprétation des présentes sera de la compétence des juridictions françaises. La loi française est seule applicable.`;
+}
+
+function renderSettings() {
+  const c = db.company;
+  $('#main').innerHTML = `<div class="topbar"><h1>Paramètres de l'entreprise</h1></div>
+    <div class="card"><h3>🎨 Branding (logo & couleur)</h3>
+      <div class="form-row">
+        <div>
+          <label>Logo entreprise (PNG/JPG, max 250 KB)</label>
+          <input type="file" id="co-logo-file" accept="image/*" style="padding:6px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--muted);width:100%">
+          ${c.logo ? `<div style="margin-top:8px"><img src="${c.logo}" style="max-height:60px;border:1px solid var(--border);border-radius:8px;padding:8px;background:#fff"><br><button class="btn btn-sm btn-danger" id="co-logo-remove" type="button" style="margin-top:4px">Retirer le logo</button></div>` : '<div style="margin-top:4px;font-size:12px;color:var(--muted)">Aucun logo. Uploadez pour l\'afficher sur vos PDF.</div>'}
+        </div>
+        <div>
+          <label>Couleur principale</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="color" id="co-primaryColor" value="${escapeHtml(c.primaryColor||'#5469d4')}" style="width:60px;height:38px;padding:2px">
+            <input type="text" id="co-primaryColor-hex" value="${escapeHtml(c.primaryColor||'#5469d4')}" style="flex:1" pattern="^#[0-9A-Fa-f]{6}$">
+          </div>
+          <div style="margin-top:4px;font-size:12px;color:var(--muted)">Utilisée pour les boutons et accents visuels</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card"><h3>Identité</h3>
+      <div class="form-row"><div><label>Nom / Raison sociale</label><input id="co-name" value="${escapeHtml(c.name)}"></div>
+      <div><label>Forme juridique</label><select id="co-legalForm">${['EI','EIRL','EURL','SARL','SAS','SASU','Auto-entrepreneur','SCI','Autre'].map(f => `<option ${f===c.legalForm?'selected':''}>${f}</option>`).join('')}</select></div></div>
+      <div class="form-row cols-1"><div><label>Adresse</label><input id="co-address" value="${escapeHtml(c.address)}"></div></div>
+      <div class="form-row cols-3"><div><label>Code postal</label><input id="co-postalCode" value="${escapeHtml(c.postalCode)}"></div><div><label>Ville</label><input id="co-city" value="${escapeHtml(c.city)}"></div><div><label>Pays</label><input id="co-country" value="${escapeHtml(c.country)}"></div></div>
+      <div class="form-row cols-3"><div><label>SIRET</label><input id="co-siret" value="${escapeHtml(c.siret)}"></div><div><label>Code APE</label><input id="co-ape" value="${escapeHtml(c.ape)}"></div><div><label>Email</label><input id="co-email" value="${escapeHtml(c.email)}"></div></div>
+      <div class="form-row"><div><label>Téléphone</label><input id="co-phone" value="${escapeHtml(c.phone)}"></div><div><label>Site web</label><input id="co-website" value="${escapeHtml(c.website)}"></div></div>
+      <h3>TVA</h3>
+      <div class="form-row"><div><label>Régime de TVA</label><select id="co-tvaRegime"><option value="franchise" ${c.tvaRegime==='franchise'?'selected':''}>Franchise en base</option><option value="normal" ${c.tvaRegime==='normal'?'selected':''}>Régime normal</option></select></div><div><label>N° TVA</label><input id="co-tvaNumber" value="${escapeHtml(c.tvaNumber)}"></div></div>
+      <h3>Bancaire</h3>
+      <div class="form-row"><div><label>IBAN</label><input id="co-iban" value="${escapeHtml(c.iban)}"></div><div><label>BIC</label><input id="co-bic" value="${escapeHtml(c.bic)}"></div></div>
+      <h3>Mentions légales</h3>
+      <div class="form-row cols-1"><div><label>Assureur décennale (nom + adresse complète)</label><input id="co-decennale" value="${escapeHtml(c.decennale)}" placeholder="ex. FIDELIDADE - COMPANHIA DE SEGUROS S.A, Tour Aurore, 18 Place des Reflets, 92976 PARIS LA DÉFENSE CEDEX"></div></div>
+      <div class="form-row"><div><label>N° de contrat d'assurance</label><input id="co-insuranceContract" value="${escapeHtml(c.insuranceContract||'')}" placeholder="ex. CRCD01-044704"></div><div><label>RC Pro (si assureur différent)</label><input id="co-rcpro" value="${escapeHtml(c.rcpro)}"></div></div>
+      <div class="form-row cols-1"><div><label>Activité déclarée à l'assurance décennale</label><input id="co-insuredActivity" value="${escapeHtml(c.insuredActivity||'')}" placeholder="ex. maçonnerie et béton armé"><div style="font-size:12px;color:var(--muted);margin-top:4px">Génère la phrase : « Les travaux sont réalisés dans le strict cadre de l'activité "…" déclarée à l'assurance décennale de l'entreprise. »</div></div></div>
+
+      <h3>🛡️ Mentions par défaut (protection juridique)</h3>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Ces textes seront automatiquement pré-remplis dans chaque nouveau devis. Vous pourrez les ajuster au cas par cas.</p>
+      <div class="form-row cols-1"><div><label>Notes par défaut</label><textarea id="co-defaultNotes" rows="3" placeholder="ex. Ce devis est établi pour des prestations de main-d'œuvre uniquement. Tous les matériaux sont à la charge du client.">${escapeHtml(c.defaultNotes||'')}</textarea></div></div>
+      <div class="form-row cols-1"><div><label>Prestations exclues par défaut</label><textarea id="co-defaultExclusions" rows="5" placeholder="– Étanchéité&#10;– Isolation&#10;– Revêtements (carrelage, résine, enrobé, etc.)&#10;– Gestion et évacuation des eaux pluviales&#10;– Études techniques, notes de calcul">${escapeHtml(c.defaultExclusions||'')}</textarea></div></div>
+      <div class="form-row cols-1"><div><label>Conditions de règlement</label><textarea id="co-paymentTerms" rows="3" placeholder="Aucun escompte consenti pour paiement anticipé.&#10;Échéancier : 30 % à la commande, 40 % à mi-chantier, 30 % à la réception.">${escapeHtml(c.paymentTerms||'')}</textarea></div></div>
+      <div class="form-row cols-1"><div><label>Pénalités de retard</label><textarea id="co-latePenalties" rows="3" placeholder="Pénalités en cas de retard de paiement :&#10;Taux Refi appliqué par la BCE majoré de 10 points&#10;Indemnité forfaitaire pour frais de recouvrement : 40 euros">${escapeHtml(c.latePenalties||'')}</textarea><button class="btn btn-sm" id="btn-fill-defaults" type="button" style="margin-top:8px">📋 Insérer les mentions types BTP</button></div></div>
+      <h3>Conditions Générales de Vente et de Travaux</h3>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Ce texte apparaîtra à la fin de chaque devis imprimé/exporté en PDF, sur une nouvelle page.</p>
+      <div class="form-row cols-1">
+        <div>
+          <label>Texte CGV (utilisez ** pour du gras, ex : **1 – TITRE**)</label>
+          <textarea id="co-cgv" rows="10" placeholder="Aucune CGV définie. Cliquez sur le bouton ci-dessous pour insérer un modèle.">${escapeHtml(c.cgv||'')}</textarea>
+          <button class="btn btn-sm" id="cgv-load-template" type="button" style="margin-top:6px">📋 Insérer le modèle par défaut (EI paysagisme B2C)</button>
+        </div>
+      </div>
+
+      <h3>Numérotation</h3>
+      <div class="form-row cols-3"><div><label>Préfixe devis</label><input id="co-quotePrefix" value="${escapeHtml(c.quotePrefix||'DEV')}"></div><div><label>Prochain n° devis</label><input type="number" id="co-nextQuoteNum" value="${c.nextQuoteNum||1}"></div><div></div></div>
+      <div class="form-row cols-3"><div><label>Préfixe facture</label><input id="co-invoicePrefix" value="${escapeHtml(c.invoicePrefix||'FAC')}"></div><div><label>Prochain n° facture</label><input type="number" id="co-nextInvoiceNum" value="${c.nextInvoiceNum||1}"></div><div></div></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button class="btn btn-primary" id="co-save">Enregistrer</button></div>
+    </div>
+    <div class="card"><h2>Cloud / Partage</h2>
+      <p style="color:var(--muted)">Vos données sont synchronisées en temps réel via Firebase. Pour partager l'app : envoyez l'URL de cette page à vos collaborateurs, ils créeront un compte avec leur email et auront accès aux mêmes données.</p>
+      <div style="display:flex;gap:8px"><button class="btn" onclick="copyShareableUrl()">🔗 Copier le lien d'invitation</button>
+      <button class="btn btn-danger" onclick="if(confirm('Vraiment effacer la config Firebase ? Vous serez déconnecté.')) { localStorage.removeItem('mesdevis_firebase_config'); location.reload(); }">Reconfigurer Firebase</button></div>
+    </div>`;
+  // Logo upload handler
+  const logoInput = document.getElementById('co-logo-file');
+  if (logoInput) logoInput.onchange = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    if (file.size > 250 * 1024) { alert('Fichier trop lourd (max 250 KB). Utilisez une image compressée.'); return; }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      db.company.logo = reader.result;
+      await saveCompany();
+      toast('Logo enregistré');
+      renderSettings();
+    };
+    reader.readAsDataURL(file);
+  };
+  const logoRemove = document.getElementById('co-logo-remove');
+  if (logoRemove) logoRemove.onclick = async () => {
+    if (!confirm('Retirer le logo ?')) return;
+    db.company.logo = ''; await saveCompany(); toast('Logo retiré'); renderSettings();
+  };
+  // Sync color picker with hex input
+  const colorPicker = document.getElementById('co-primaryColor');
+  const colorHex = document.getElementById('co-primaryColor-hex');
+  if (colorPicker && colorHex) {
+    colorPicker.oninput = () => { colorHex.value = colorPicker.value; };
+    colorHex.oninput = () => { if (/^#[0-9A-Fa-f]{6}$/.test(colorHex.value)) colorPicker.value = colorHex.value; };
+  }
+
+  $('#co-save').onclick = async () => {
+    const fields = ['name','legalForm','address','postalCode','city','country','siret','ape','email','phone','website','tvaRegime','tvaNumber','iban','bic','decennale','rcpro','insuranceContract','insuredActivity','defaultNotes','defaultExclusions','paymentTerms','latePenalties','quotePrefix','invoicePrefix','cgv','primaryColor'];
+    fields.forEach(f => { db.company[f] = $('#co-'+f).value; });
+    db.company.nextQuoteNum = Number($('#co-nextQuoteNum').value)||1;
+    db.company.nextInvoiceNum = Number($('#co-nextInvoiceNum').value)||1;
+    await saveCompany(); toast('Paramètres enregistrés');
+  };
+  const fillBtn = document.getElementById('btn-fill-defaults');
+  if (fillBtn) fillBtn.onclick = () => {
+    if (!confirm('Insérer les mentions types BTP dans les 4 champs ci-dessus ? Le contenu actuel sera remplacé.')) return;
+    document.getElementById('co-defaultNotes').value = "Ce devis est établi pour des prestations de main-d'œuvre uniquement. Tous les matériaux sont à la charge du client.";
+    document.getElementById('co-defaultExclusions').value = "– Étanchéité\n– Isolation\n– Revêtements (carrelage, résine, enrobé, etc.)\n– Gestion et évacuation des eaux pluviales\n– Études techniques, notes de calcul";
+    document.getElementById('co-paymentTerms').value = "Aucun escompte consenti pour paiement anticipé.\nÉchéancier : 30 % à la commande, 40 % à mi-chantier, 30 % (solde) à la réception des travaux.\nPaiement à 30 jours à compter de la réception de la facture.";
+    document.getElementById('co-latePenalties').value = "Pénalités en cas de retard de paiement :\nTaux Refi appliqué par la BCE majoré de 10 points.\nIndemnité forfaitaire pour frais de recouvrement : 40 euros.";
+    toast('Mentions insérées — pensez à Enregistrer');
+  };
+  const cgvBtn = document.getElementById('cgv-load-template');
+  if (cgvBtn) cgvBtn.onclick = () => {
+    if (document.getElementById('co-cgv').value.trim() && !confirm('Remplacer les CGV actuelles par le modèle ?')) return;
+    document.getElementById('co-cgv').value = defaultCgvTemplate();
+    toast('Modèle inséré — pensez à Enregistrer');
+  };
+}
+
+window.exportInvoicesCsv = () => {
+  const rows = [['Numero','Date','Echeance','Client','Ville','Objet','TotalHT','TVA','TotalTTC','Statut','DatePaiement','DevisSource']];
+  db.invoices.forEach(inv => {
+    const client = clientById(inv.clientId);
+    const t = calcDoc(inv);
+    rows.push([
+      inv.number || '',
+      inv.date || '',
+      inv.dueDate || '',
+      clientName(client) || '',
+      client?.city || '',
+      (inv.object||'').replace(/"/g, '""').replace(/\n/g, ' '),
+      t.ht.toFixed(2).replace('.', ','),
+      t.tva.toFixed(2).replace('.', ','),
+      t.ttc.toFixed(2).replace('.', ','),
+      inv.status || '',
+      inv.paidAt || '',
+      inv.sourceQuoteId ? (db.quotes.find(q=>q.id===inv.sourceQuoteId)?.number||'') : ''
+    ]);
+  });
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `factures-${today()}.csv`;
+  a.click();
+  toast('CSV téléchargé (' + db.invoices.length + ' factures)');
+};
+
+window.navigate = navigate;
+
+/* =============================================================
+   START
+   ============================================================= */
+boot();
+</script>
+</body>
+</html>
