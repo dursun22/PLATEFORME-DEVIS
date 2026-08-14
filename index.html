@@ -138,6 +138,10 @@
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
 
   /* ===== PRINT VIEW ===== */
+  /* ===== Modale d'aperçu du devis ===== */
+  .preview-bg { position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 200; display: flex; flex-direction: column; align-items: center; padding: 16px; overflow-y: auto; }
+  .preview-bar { position: sticky; top: 0; display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; z-index: 2; }
+  .preview-frame { flex: 1; width: 100%; max-width: 1100px; border: none; border-radius: 6px; background: #4a4a52; min-height: 80vh; }
   .print-view { display: none; }
   @media print {
     html, body { background: #fff !important; }
@@ -151,10 +155,11 @@
     .app, .sync-status, .center-screen { display: none !important; }
     @page { size: A4; margin: 14mm 15mm 16mm; }
   }
-  /* Reset des styles globaux de l'app qui fuient dans le PDF */
+  /* Reset des styles globaux de l'app qui fuient dans le PDF ET dans l'aperçu */
   .print-view table { width: auto; }
-  .print-view td, .print-view th { border: none; padding: 0; text-transform: none; letter-spacing: normal; color: inherit; font-size: inherit; font-weight: inherit; text-align: left; }
+  .print-view td, .print-view th { border: none; padding: 0; text-transform: none; letter-spacing: normal; color: inherit; font-size: inherit; font-weight: inherit; text-align: left; background: transparent; }
   .print-view table.bp-lines, .print-view table.bp-client, .print-view table.bp-totals { width: 100%; }
+  /*PDF-CSS-START*/
   /* ============ PDF PREMIUM STYLE — anthracite & ambre ============ */
   :root { --bp-dark: #16283c; --bp-amber: #1e6091; --bp-amber-dark: #14496e; --bp-soft: #f5f7f9; --bp-line: #dfe5ea; }
   .bp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12pt; padding-bottom: 9pt; border-bottom: 2.5pt solid var(--bp-dark); }
@@ -210,6 +215,7 @@
   .print-cgv-body { font-size: 6.8pt; line-height: 1.35; color: #333; text-align: justify; column-count: 2; column-gap: 14pt; column-rule: 1px solid #e6e6e6; }
   .print-cgv-body strong { color: #111; font-weight: 700; display: inline-block; margin-top: 3pt; }
 
+  /*PDF-CSS-END*/
   .dash-grid { grid-template-columns: 2fr 1fr; }
 @media (max-width: 900px) {
     .dash-grid { grid-template-columns: 1fr !important; }
@@ -733,8 +739,75 @@ async function createDepositInvoice(quote) {
 }
 
 /* =============================================================
-   PUBLIC QUOTE VIEW (no login required)
+   APERÇU & VUE PUBLIQUE
    ============================================================= */
+
+/* ===== Aperçu du devis — rendu strictement identique à l'impression =====
+   Le contenu est affiché dans une iframe isolée qui ne charge QUE la feuille
+   de style du PDF : aucun style de l'application ne peut interférer. */
+function pdfStylesheet() {
+  const all = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n');
+  const a = all.indexOf('/*PDF-CSS-START*/');
+  const b = all.indexOf('/*PDF-CSS-END*/');
+  return (a >= 0 && b > a) ? all.slice(a, b) : '';
+}
+
+function showPreview(doc, kind) {
+  renderPrintView(doc, kind);
+  const src = document.getElementById('print');
+  const page1 = src.querySelector('.bp-page1');
+  const cgv = src.querySelector('.print-cgv');
+
+  const clean = (node) => {
+    if (!node) return '';
+    const tmp = node.cloneNode(true);
+    tmp.querySelectorAll('.bp-footer-dyn').forEach(n => n.remove());
+    return tmp.innerHTML;
+  };
+
+  document.querySelectorAll('.preview-bg').forEach(n => n.remove());
+  const bg = document.createElement('div');
+  bg.className = 'preview-bg';
+  bg.innerHTML = `
+    <div class="preview-bar">
+      <button class="btn btn-primary" data-pv-print>⎙ Imprimer / PDF</button>
+      <button class="btn" data-pv-close>✕ Fermer</button>
+      <span style="color:#a1a1aa;font-size:12px">Rendu identique au document imprimé</span>
+    </div>
+    <iframe class="preview-frame" title="Aperçu"></iframe>`;
+  document.body.appendChild(bg);
+
+  const legal = [db.company.legalForm, db.company.name].filter(Boolean).join(' ')
+    + (db.company.siret ? ' — SIRET ' + db.company.siret : '');
+  const nbPages = cgv ? 2 : 1;
+  const footer = (i) => `<div class="bp-footer" style="position:absolute;left:15mm;right:15mm;bottom:8mm">
+      <span>${escapeHtml(legal)}</span><span>Page ${i}/${nbPages}</span></div>`;
+
+  const frame = bg.querySelector('.preview-frame');
+  const d = frame.contentDocument;
+  d.open();
+  d.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    html,body{margin:0;padding:0;background:#4a4a52;}
+    .sheet{position:relative;width:210mm;min-height:297mm;padding:14mm 15mm 16mm;box-sizing:border-box;
+      background:#fff;color:#111;margin:0 auto 20px;box-shadow:0 12px 40px rgba(0,0,0,.5);
+      font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;font-size:10pt;}
+    .sheet table{border-collapse:collapse;}
+    .print-cgv{page-break-before:auto;}
+    ${pdfStylesheet()}
+  </style></head><body>
+    <div class="sheet">${clean(page1)}${footer(1)}</div>
+    ${cgv ? `<div class="sheet"><div class="print-cgv">${clean(cgv)}</div>${footer(2)}</div>` : ''}
+  </body></html>`);
+  d.close();
+
+  bg.querySelector('[data-pv-close]').onclick = () => bg.remove();
+  bg.querySelector('[data-pv-print]').onclick = () => { bg.remove(); renderPrintView(doc, kind); window.print(); };
+  bg.onclick = (e) => { if (e.target === bg) bg.remove(); };
+  document.addEventListener('keydown', function esc(ev) {
+    if (ev.key === 'Escape') { bg.remove(); document.removeEventListener('keydown', esc); }
+  });
+}
+
 async function showPublicQuote(quoteId) {
   showPublicView();
   const el = document.getElementById('public-content');
@@ -806,7 +879,7 @@ function renderPublicQuote(doc) {
     <table>
       <thead><tr><th>Description</th><th>Qté</th><th>PU HT</th><th>TVA</th><th style="text-align:right">Total HT</th></tr></thead>
       <tbody>
-        ${doc.lines.map(l => `<tr><td>${nl2br(l.description)}</td><td>${l.quantity}</td><td>${fmtMoney(l.unitPrice)}</td><td>${l.tva}%</td><td style="text-align:right"><strong>${fmtMoney(calcLine(l).ht)}</strong></td></tr>`).join('')}
+        ${doc.lines.map(l => `<tr><td>${nl2br(l.description)}</td><td>${l.quantity}</td><td>${fmtMoney(lineDisplayUnitPrice(l))}</td><td>${l.tva}%</td><td style="text-align:right"><strong>${fmtMoney(calcLine(l).ht)}</strong></td></tr>`).join('')}
       </tbody>
     </table>
     <div style="display:flex;justify-content:flex-end;margin-top:16px">
@@ -855,7 +928,24 @@ function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'
 function nl2br(s) { return escapeHtml(s).replace(/\n/g,'<br>'); }
 function clientName(c) { if (!c) return ''; if (c.type === 'pro') return c.companyName || `${c.firstName||''} ${c.lastName||''}`.trim(); return [c.civility, c.firstName, c.lastName].filter(Boolean).join(' '); }
 function clientById(id) { return db.clients.find(c => c.id === id); }
-function calcLine(line) { const ht = (Number(line.quantity)||0) * (Number(line.unitPrice)||0); const tva = ht * (Number(line.tva)||0) / 100; return { ht, tva, ttc: ht + tva }; }
+/* ===== Chiffrage interne — jamais affiché au client ===== */
+function emptyCosting() { return { materials: [] }; }
+function costingMaterialsTotal(c) {
+  return (c?.materials||[]).reduce((s,m) => s + (Number(m.qty)||0) * (Number(m.unitPrice)||0), 0);
+}
+
+function calcLine(line) {
+  const base = (Number(line.quantity)||0) * (Number(line.unitPrice)||0);
+  const mat = costingMaterialsTotal(line.costing);
+  const ht = base + mat;
+  const tva = ht * (Number(line.tva)||0) / 100;
+  return { ht, tva, ttc: ht + tva, base, mat };
+}
+/* Prix unitaire tout compris affiché au client (main d'œuvre + matériaux) */
+function lineDisplayUnitPrice(line) {
+  const q = Number(line.quantity)||1;
+  return calcLine(line).ht / (q || 1);
+}
 function calcDoc(doc) { let ht = 0, tva = 0; (doc.lines||[]).forEach(l => { const c = calcLine(l); ht += c.ht; tva += c.tva; }); return { ht, tva, ttc: ht + tva }; }
 function toast(msg) { const host = $('#toast-host'); const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg; host.appendChild(el); setTimeout(() => el.remove(), 3500); }
 function formatClientAddress(c) { if (!c) return ''; return [c.address, [c.postalCode, c.city].filter(Boolean).join(' '), c.country, c.email && ('Email : ' + c.email), c.phone && ('Tél : ' + c.phone), c.siret && ('SIRET : ' + c.siret)].filter(Boolean).join('\n'); }
@@ -1062,28 +1152,39 @@ function renderClientEditor(id) {
 }
 
 function renderMaterialList() {
-  const cats = [...new Set(db.materials.map(m => m.category || 'Général'))].sort();
-  const totalRefs = db.materials.length;
+  const sups = [...new Set(db.materials.map(m => m.supplier || 'Sans fournisseur'))].sort();
+  const total = db.materials.length;
   return `<div class="topbar"><h1>🧱 Catalogue matériaux</h1><a class="btn btn-primary" href="#/materiaux/new">+ Nouveau matériau</a></div>
     <div class="card">
-      <p style="color:var(--muted);margin:0 0 12px">Vos prix d'achat fournisseurs. Ils servent à chiffrer vos prestations — <strong>ils n'apparaissent jamais sur le devis client</strong>.</p>
-      ${totalRefs === 0 ? `<div class="empty"><h3>Aucun matériau</h3><p>Ajoutez vos fournitures courantes avec leur prix d'achat pour chiffrer vos chantiers.</p></div>` : cats.map(cat => `
-        <h3>${escapeHtml(cat)}</h3>
-        <table><thead><tr><th>Désignation</th><th>Fournisseur</th><th>Réf.</th><th>Unité</th><th style="text-align:right">Prix d'achat HT</th><th></th></tr></thead><tbody>
-        ${db.materials.filter(m => (m.category||'Général')===cat).sort((a,b)=>a.name.localeCompare(b.name)).map(m => `
-          <tr>
-            <td><strong>${escapeHtml(m.name)}</strong></td>
-            <td>${escapeHtml(m.supplier||'—')}</td>
-            <td style="color:var(--muted)">${escapeHtml(m.reference||'—')}</td>
-            <td>${escapeHtml(m.unit)}</td>
-            <td style="text-align:right;font-weight:600">${fmtMoney(m.purchasePrice)}</td>
-            <td style="text-align:right"><a class="btn btn-sm" href="#/materiaux/edit/${m.id}">Modifier</a>
-            <button class="btn btn-sm btn-danger" data-del-mat="${m.id}">×</button></td>
-          </tr>`).join('')}
-        </tbody></table>
-      `).join('')}
+      <p style="color:var(--muted);margin:0 0 4px">Vos prix d'achat fournisseurs. Ils servent à chiffrer vos prestations — <strong>ils n'apparaissent jamais sur le devis client</strong>.</p>
+      ${total ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px">
+        ${sups.map(s => `<span style="background:var(--input-bg);border:1px solid var(--border);border-radius:999px;padding:4px 12px;font-size:12px"><strong>${escapeHtml(s)}</strong> · ${db.materials.filter(m=>(m.supplier||'Sans fournisseur')===s).length} réf.</span>`).join('')}
+      </div>` : ''}
+      ${total === 0 ? `<div class="empty"><h3>Aucun matériau</h3><p>Ajoutez vos fournitures courantes avec leur prix d'achat pour chiffrer vos chantiers.</p></div>` : sups.map(sup => {
+        const list = db.materials.filter(m => (m.supplier||'Sans fournisseur') === sup);
+        const cats = [...new Set(list.map(m => m.category || 'Général'))].sort();
+        return `
+        <div style="margin-top:22px;padding-top:14px;border-top:2px solid var(--accent)">
+          <h2 style="margin:0 0 2px;color:var(--accent)">${escapeHtml(sup)}</h2>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${list.length} référence(s)</div>
+          ${cats.map(cat => `
+            <h3 style="margin-top:14px">${escapeHtml(cat)}</h3>
+            <table><thead><tr><th>Désignation</th><th>Réf.</th><th>Unité</th><th style="text-align:right">Prix d'achat HT</th><th></th></tr></thead><tbody>
+            ${list.filter(m => (m.category||'Général')===cat).sort((a,b)=>a.name.localeCompare(b.name)).map(m => `
+              <tr>
+                <td><strong>${escapeHtml(m.name)}</strong></td>
+                <td style="color:var(--muted)">${escapeHtml(m.reference||'—')}</td>
+                <td>${escapeHtml(m.unit)}</td>
+                <td style="text-align:right;font-weight:600">${fmtMoney(m.purchasePrice)}</td>
+                <td style="text-align:right;white-space:nowrap"><a class="btn btn-sm" href="#/materiaux/edit/${m.id}">Modifier</a>
+                <button class="btn btn-sm btn-danger" data-del-mat="${m.id}">×</button></td>
+              </tr>`).join('')}
+            </tbody></table>`).join('')}
+        </div>`;
+      }).join('')}
     </div>`;
 }
+
 function bindMaterialList() {
   $$('[data-del-mat]').forEach(b => b.onclick = async () => {
     if (!confirm('Supprimer ce matériau du catalogue ?')) return;
@@ -1186,32 +1287,14 @@ function bindDocList(kind) {
 
 function newLine() { return { id: uid(), description: '', quantity: 1, unit: 'forfait', unitPrice: 0, tva: db.company.tvaRegime === 'franchise' ? 0 : 20, costing: null }; }
 
-/* ===== Chiffrage interne (jamais affiché au client) ===== */
-function emptyCosting() {
-  return { materials: [], laborQty: 0, laborRate: Number(db.company.laborRate)||0, coef: Number(db.company.materialCoef)||1 };
-}
-function costingMaterialsTotal(c) {
-  return (c?.materials||[]).reduce((s,m) => s + (Number(m.qty)||0) * (Number(m.unitPrice)||0), 0);
-}
-function costingLaborTotal(c) {
-  return (Number(c?.laborQty)||0) * (Number(c?.laborRate)||0);
-}
-function costingTotals(c) {
-  const mat = costingMaterialsTotal(c);
-  const lab = costingLaborTotal(c);
-  const cost = mat + lab;
-  const coef = Number(c?.coef)||1;
-  return { mat, lab, cost, coef, sale: cost * coef, margin: cost * coef - cost };
-}
-/* Rentabilité d'un document entier */
+/* Rentabilité du document : coût matériaux vs prix de vente */
 function docCosting(doc) {
-  let cost = 0;
-  (doc.lines||[]).forEach(l => {
-    if (l.costing) cost += costingTotals(l.costing).cost * (Number(l.quantity)||1);
-  });
+  let mat = 0;
+  (doc.lines||[]).forEach(l => { mat += costingMaterialsTotal(l.costing); });
   const sale = calcDoc(doc).ht;
-  return { cost, sale, margin: sale - cost, pct: sale > 0 ? Math.round(100*(sale-cost)/sale) : 0 };
+  return { mat, sale, margin: sale - mat, pct: sale > 0 ? Math.round(100*(sale-mat)/sale) : 0 };
 }
+
 function newDoc(kind) {
   const isQuote = kind === 'quote';
   const numField = isQuote ? 'nextQuoteNum' : 'nextInvoiceNum';
@@ -1262,7 +1345,7 @@ function renderQuoteEditor(id, kind) {
           <td><select data-f="unit">${['forfait','h','jour','m²','ml','m³','u','kg'].map(u => `<option value="${u}" ${u===l.unit?'selected':''}>${u}</option>`).join('')}</select></td>
           <td><input data-f="unitPrice" type="number" step="0.01" value="${l.unitPrice}"></td>
           <td><select data-f="tva">${[0,5.5,10,20].map(v => `<option value="${v}" ${Number(l.tva)===v?'selected':''}>${v}%</option>`).join('')}</select></td>
-          <td class="col-total" data-total-line="${i}">${fmtMoney(calcLine(l).ht)}</td>
+          <td class="col-total" data-total-line="${i}">${fmtMoney(calcLine(l).ht)}${calcLine(l).mat>0?`<div style="font-size:10px;color:var(--accent);font-weight:400">dont ${fmtMoney(calcLine(l).mat)} matériaux</div>`:''}</td>
           <td style="white-space:nowrap"><button class="btn btn-sm${l.costing?' btn-primary':''}" data-cost-line="${i}" title="Chiffrer : matériaux + main d'œuvre">🧮</button> <button class="btn btn-sm btn-ghost btn-danger" data-del-line="${i}">×</button></td></tr>
           <tr data-cost-row="${i}" style="display:none"><td colspan="7" style="padding:0;border:none"><div class="costing-panel" data-cost-panel="${i}"></div></td></tr>`).join('')}
         </tbody></table>
@@ -1309,16 +1392,15 @@ function renderQuoteEditor(id, kind) {
       const l = doc.lines[i];
       if (!l.costing) l.costing = emptyCosting();
       const c = l.costing;
-      const t = costingTotals(c);
-      const cats = [...new Set(db.materials.map(m => m.category||'Général'))].sort();
+      const mat = costingMaterialsTotal(c);
+      const sups = [...new Set(db.materials.map(m => m.supplier||'Sans fournisseur'))].sort();
       panel.innerHTML = `
-        <h4>🧱 Matériaux</h4>
-        ${db.materials.length ? `<div style="display:flex;gap:6px;margin-bottom:8px">
-          <select data-mat-select style="flex:1;font-size:12px"><option value="">— ajouter un matériau du catalogue —</option>
-          ${cats.map(cat => `<optgroup label="${escapeHtml(cat)}">${db.materials.filter(m=>(m.category||'Général')===cat).sort((a,b)=>a.name.localeCompare(b.name)).map(m=>`<option value="${m.id}">${escapeHtml(m.name)} — ${fmtMoney(m.purchasePrice)}/${escapeHtml(m.unit)}</option>`).join('')}</optgroup>`).join('')}
-          </select><button class="btn btn-sm btn-primary" data-mat-add type="button">+</button>
-        </div>` : `<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Aucun matériau au catalogue. <a href="#/materiaux/new" style="color:var(--accent)">En ajouter</a></div>`}
-        ${c.materials.length ? `<table><thead><tr><th>Désignation</th><th style="width:70px">Qté</th><th style="width:80px">PU achat</th><th style="width:80px;text-align:right">Total</th><th style="width:28px"></th></tr></thead><tbody>
+        <h4>🧱 Matériaux de cette prestation <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted)">— ajoutés au total, jamais détaillés sur le devis</span></h4>
+        ${db.materials.length ? `<select data-mat-select style="width:100%;font-size:12px;margin-bottom:8px"><option value="">+ Ajouter un matériau du catalogue…</option>
+          ${sups.map(sup => `<optgroup label="${escapeHtml(sup)}">${db.materials.filter(m=>(m.supplier||'Sans fournisseur')===sup).sort((a,b)=>a.name.localeCompare(b.name)).map(m=>`<option value="${m.id}">${escapeHtml(m.name)} — ${fmtMoney(m.purchasePrice)}/${escapeHtml(m.unit)}</option>`).join('')}</optgroup>`).join('')}
+          </select>`
+        : `<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Aucun matériau au catalogue. <a href="#/materiaux/new" style="color:var(--accent)">En ajouter un</a></div>`}
+        ${c.materials.length ? `<table><thead><tr><th>Désignation</th><th style="width:70px">Qté</th><th style="width:85px">PU achat</th><th style="width:85px;text-align:right">Total</th><th style="width:28px"></th></tr></thead><tbody>
           ${c.materials.map((m,j)=>`<tr>
             <td>${escapeHtml(m.name)} <span style="color:var(--muted)">(${escapeHtml(m.unit)})</span></td>
             <td><input type="number" step="0.01" data-mq="${j}" value="${m.qty}" style="padding:3px 5px;font-size:12px"></td>
@@ -1327,86 +1409,53 @@ function renderQuoteEditor(id, kind) {
             <td><button class="btn btn-sm btn-ghost btn-danger" data-mdel="${j}" type="button" style="padding:2px 6px">×</button></td>
           </tr>`).join('')}
         </tbody></table>` : ''}
-        <div class="costing-sum"><span>Sous-total matériaux</span><strong data-c-mat>${fmtMoney(t.mat)}</strong></div>
-
-        <h4 style="margin-top:12px">👷 Main d'œuvre</h4>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <input type="number" step="0.5" data-lab-qty value="${c.laborQty}" style="width:80px;padding:4px 6px;font-size:12px">
-          <span style="font-size:12px">${escapeHtml(db.company.laborUnit==='jour'?'jour(s)':'heure(s)')} ×</span>
-          <input type="number" step="0.01" data-lab-rate value="${c.laborRate}" style="width:80px;padding:4px 6px;font-size:12px">
-          <span style="font-size:12px">€ =</span>
-          <strong data-c-lab style="font-size:13px">${fmtMoney(t.lab)}</strong>
-        </div>
-
-        <div class="costing-sum total"><span>Déboursé sec (coût réel)</span><strong data-c-cost>${fmtMoney(t.cost)}</strong></div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-          <span style="font-size:12px">Coefficient</span>
-          <input type="number" step="0.01" data-c-coef value="${c.coef}" style="width:80px;padding:4px 6px;font-size:12px">
-          <span style="font-size:12px">→ Prix de vente</span>
-          <strong data-c-sale style="font-size:14px;color:var(--accent)">${fmtMoney(t.sale)}</strong>
-          <button class="btn btn-sm btn-primary" data-c-apply type="button">Appliquer à la ligne</button>
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px">Marge : <span data-c-margin>${fmtMoney(t.margin)}</span> — ce détail n'apparaît jamais sur le devis client.</div>
+        <div class="costing-sum total"><span>Total matériaux ajouté à cette ligne</span><strong data-c-mat style="color:var(--accent)">${fmtMoney(mat)}</strong></div>
       `;
 
       const refreshCosting = () => {
-        const tt = costingTotals(c);
         c.materials.forEach((m,j) => {
           const cell = panel.querySelector(`[data-mt="${j}"]`);
           if (cell) cell.textContent = fmtMoney((Number(m.qty)||0)*(Number(m.unitPrice)||0));
         });
-        const set = (sel,v) => { const e = panel.querySelector(sel); if (e) e.textContent = v; };
-        set('[data-c-mat]', fmtMoney(tt.mat));
-        set('[data-c-lab]', fmtMoney(tt.lab));
-        set('[data-c-cost]', fmtMoney(tt.cost));
-        set('[data-c-sale]', fmtMoney(tt.sale));
-        set('[data-c-margin]', fmtMoney(tt.margin));
+        const e = panel.querySelector('[data-c-mat]');
+        if (e) e.textContent = fmtMoney(costingMaterialsTotal(c));
+        refreshTotals();
       };
 
-      const addBtn = panel.querySelector('[data-mat-add]');
-      if (addBtn) addBtn.onclick = () => {
-        const sel = panel.querySelector('[data-mat-select]');
-        const mat = db.materials.find(x => x.id === sel.value);
-        if (!mat) { alert('Sélectionnez un matériau'); return; }
-        c.materials.push({ materialId: mat.id, name: mat.name, unit: mat.unit, qty: 1, unitPrice: mat.purchasePrice });
-        paintCosting(i);
+      const sel = panel.querySelector('[data-mat-select]');
+      if (sel) sel.onchange = () => {
+        const m = db.materials.find(x => x.id === sel.value);
+        if (!m) return;
+        c.materials.push({ materialId: m.id, name: m.name, unit: m.unit, qty: 1, unitPrice: m.purchasePrice });
+        paintCosting(i); refreshTotals();
       };
       panel.querySelectorAll('[data-mq]').forEach(inp => { inp.oninput = () => { c.materials[+inp.dataset.mq].qty = Number(inp.value); refreshCosting(); }; });
       panel.querySelectorAll('[data-mp]').forEach(inp => { inp.oninput = () => { c.materials[+inp.dataset.mp].unitPrice = Number(inp.value); refreshCosting(); }; });
-      panel.querySelectorAll('[data-mdel]').forEach(b => { b.onclick = () => { c.materials.splice(+b.dataset.mdel,1); paintCosting(i); }; });
-      const lq = panel.querySelector('[data-lab-qty]'); if (lq) lq.oninput = () => { c.laborQty = Number(lq.value); refreshCosting(); };
-      const lr = panel.querySelector('[data-lab-rate]'); if (lr) lr.oninput = () => { c.laborRate = Number(lr.value); refreshCosting(); };
-      const cf = panel.querySelector('[data-c-coef]'); if (cf) cf.oninput = () => { c.coef = Number(cf.value); refreshCosting(); };
-      const ap = panel.querySelector('[data-c-apply]');
-      if (ap) ap.onclick = () => {
-        const tt = costingTotals(c);
-        doc.lines[i].unitPrice = Math.round(tt.sale * 100) / 100;
-        const priceInput = main.querySelector(`tr[data-line="${i}"] [data-f="unitPrice"]`);
-        if (priceInput) priceInput.value = doc.lines[i].unitPrice;
-        refreshTotals();
-        toast('Prix appliqué : ' + fmtMoney(doc.lines[i].unitPrice));
-      };
+      panel.querySelectorAll('[data-mdel]').forEach(b => { b.onclick = () => { c.materials.splice(+b.dataset.mdel,1); paintCosting(i); refreshTotals(); }; });
     }
 
     function refreshProfit() {
       const el = document.getElementById('profit-content');
       if (!el) return;
       const p = docCosting(doc);
-      if (p.cost === 0) {
-        el.innerHTML = `<span style="color:var(--muted)">Utilisez le bouton 🧮 sur vos lignes pour chiffrer matériaux et main d'œuvre.</span>`;
+      if (p.mat === 0) {
+        el.innerHTML = `<span style="color:var(--muted)">Utilisez le bouton 🧮 sur vos lignes pour y intégrer des matériaux.</span>`;
         return;
       }
       el.innerHTML = `
-        <div style="display:flex;justify-content:space-between"><span>Déboursé sec (coût)</span><strong>${fmtMoney(p.cost)}</strong></div>
-        <div style="display:flex;justify-content:space-between"><span>Prix de vente HT</span><strong>${fmtMoney(p.sale)}</strong></div>
-        <div style="display:flex;justify-content:space-between;margin-top:4px;padding-top:4px;border-top:1px solid rgba(59,130,246,.25)"><span>Marge</span><strong style="color:${p.margin>=0?'var(--success)':'var(--danger)'}">${fmtMoney(p.margin)} (${p.pct}%)</strong></div>`;
+        <div style="display:flex;justify-content:space-between"><span>Coût matériaux</span><strong>${fmtMoney(p.mat)}</strong></div>
+        <div style="display:flex;justify-content:space-between"><span>Total devis HT</span><strong>${fmtMoney(p.sale)}</strong></div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;padding-top:4px;border-top:1px solid rgba(59,130,246,.25)"><span>Reste (main d'œuvre + marge)</span><strong style="color:${p.margin>=0?'var(--success)':'var(--danger)'}">${fmtMoney(p.margin)} (${p.pct}%)</strong></div>`;
     }
 
     function refreshTotals() {
       // Mise à jour ciblée : ne touche jamais aux champs de saisie (pas de perte de focus)
       doc.lines.forEach((l, idx) => {
         const cell = main.querySelector(`[data-total-line="${idx}"]`);
-        if (cell) cell.textContent = fmtMoney(calcLine(l).ht);
+        if (cell) {
+          const cl = calcLine(l);
+          cell.innerHTML = fmtMoney(cl.ht) + (cl.mat>0 ? `<div style="font-size:10px;color:var(--accent);font-weight:400">dont ${fmtMoney(cl.mat)} matériaux</div>` : '');
+        }
       });
       const t = calcDoc(doc);
       const setTxt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
@@ -1474,6 +1523,7 @@ function renderQuoteView(id, kind) {
     ${isQuote ? `<button class="btn" id="btn-share">🔗 Lien public / e-signature</button>` : ''}
     ${isQuote && doc.status === 'accepted' && !db.invoices.find(i => i.sourceQuoteId === doc.id && i.isDeposit) ? `<button class="btn" id="btn-deposit">💸 Générer facture acompte</button>` : ''}
     ${!isQuote && doc.status !== 'paid' ? `<button class="btn" id="btn-markpaid" style="background:var(--success);color:#fff;border-color:var(--success)">✓ Marquer comme payée</button>` : ''}
+    <button class="btn" id="btn-preview">👁️ Aperçu</button>
     <button class="btn btn-primary" id="btn-print">⎙ Imprimer / PDF</button></div></div>
     <div class="card"><div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
       <div><div style="font-size:12px;color:var(--muted);text-transform:uppercase">Client</div>
@@ -1487,7 +1537,7 @@ function renderQuoteView(id, kind) {
       </div>
     </div>${doc.object ? `<div style="margin-top:18px"><strong>Objet :</strong> ${escapeHtml(doc.object)}</div>` : ''}</div>
     <div class="card"><table><thead><tr><th>Description</th><th>Qté</th><th>Unité</th><th>PU HT</th><th>TVA</th><th style="text-align:right">Total HT</th></tr></thead><tbody>
-    ${doc.lines.map(l => `<tr><td>${nl2br(l.description)}</td><td>${l.quantity}</td><td>${escapeHtml(l.unit)}</td><td>${fmtMoney(l.unitPrice)}</td><td>${l.tva}%</td><td style="text-align:right"><strong>${fmtMoney(calcLine(l).ht)}</strong></td></tr>`).join('')}
+    ${doc.lines.map(l => `<tr><td>${nl2br(l.description)}</td><td>${l.quantity}</td><td>${escapeHtml(l.unit)}</td><td>${fmtMoney(lineDisplayUnitPrice(l))}</td><td>${l.tva}%</td><td style="text-align:right"><strong>${fmtMoney(calcLine(l).ht)}</strong></td></tr>`).join('')}
     </tbody></table>
     <div style="display:flex;justify-content:flex-end;margin-top:14px"><div style="min-width:280px">
       <div class="total-row"><span>Total HT</span><strong>${fmtMoney(totals.ht)}</strong></div>
@@ -1495,6 +1545,7 @@ function renderQuoteView(id, kind) {
       <div class="total-row grand"><span>Total TTC</span><strong>${fmtMoney(totals.ttc)}</strong></div></div></div>
     ${doc.conditions ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)"><h3>Conditions</h3><div style="white-space:pre-wrap">${escapeHtml(doc.conditions)}</div></div>` : ''}</div>`;
   $('#btn-print').onclick = () => { renderPrintView(doc, kind); window.print(); };
+  $('#btn-preview').onclick = () => showPreview(doc, kind);
   if ($('#btn-share')) $('#btn-share').onclick = async () => {
     const url = await publishPublicQuote(doc);
     await navigator.clipboard.writeText(url);
@@ -1599,7 +1650,7 @@ function renderPrintView(doc, kind) {
             <td class="bp-desc">${escapeHtml(title)}${sub ? ', ' + escapeHtml(sub) : ''}</td>
             <td class="bp-c">${escapeHtml(l.unit)}</td>
             <td class="bp-c">${l.quantity}</td>
-            <td class="bp-r">${fmtMoney(l.unitPrice)}</td>
+            <td class="bp-r">${fmtMoney(lineDisplayUnitPrice(l))}</td>
             <td class="bp-r">${fmtMoney(calcLine(l).ht)}</td>
           </tr>`;
         }).join('')}
@@ -1808,14 +1859,6 @@ function renderSettings() {
       <div class="form-row"><div><label>Régime de TVA</label><select id="co-tvaRegime"><option value="franchise" ${c.tvaRegime==='franchise'?'selected':''}>Franchise en base</option><option value="normal" ${c.tvaRegime==='normal'?'selected':''}>Régime normal</option></select></div><div><label>N° TVA</label><input id="co-tvaNumber" value="${escapeHtml(c.tvaNumber)}"></div></div>
       <h3>Bancaire</h3>
       <div class="form-row"><div><label>IBAN</label><input id="co-iban" value="${escapeHtml(c.iban)}"></div><div><label>BIC</label><input id="co-bic" value="${escapeHtml(c.bic)}"></div></div>
-      <h3>🧮 Chiffrage (interne)</h3>
-      <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Valeurs par défaut du calculateur de prix. Elles servent à estimer vos coûts et n'apparaissent jamais sur les devis clients.</p>
-      <div class="form-row cols-3">
-        <div><label>Taux de main d'œuvre</label><input type="number" step="0.01" id="co-laborRate" value="${c.laborRate||0}" placeholder="ex. 45"></div>
-        <div><label>Unité de facturation MO</label><select id="co-laborUnit"><option value="heure" ${c.laborUnit!=='jour'?'selected':''}>par heure</option><option value="jour" ${c.laborUnit==='jour'?'selected':''}>par jour</option></select></div>
-        <div><label>Coefficient par défaut</label><input type="number" step="0.01" id="co-materialCoef" value="${c.materialCoef||1}"><div style="font-size:11px;color:var(--muted);margin-top:4px">1 = prix coûtant · 1,20 = +20 %</div></div>
-      </div>
-
       <h3>Mentions légales</h3>
       <div class="form-row cols-1"><div><label>Assureur décennale (nom + adresse complète)</label><input id="co-decennale" value="${escapeHtml(c.decennale)}" placeholder="ex. FIDELIDADE - COMPANHIA DE SEGUROS S.A, Tour Aurore, 18 Place des Reflets, 92976 PARIS LA DÉFENSE CEDEX"></div></div>
       <div class="form-row"><div><label>N° de contrat d'assurance</label><input id="co-insuranceContract" value="${escapeHtml(c.insuranceContract||'')}" placeholder="ex. CRCD01-044704"></div><div><label>RC Pro (si assureur différent)</label><input id="co-rcpro" value="${escapeHtml(c.rcpro)}"></div></div>
@@ -1875,10 +1918,8 @@ function renderSettings() {
   }
 
   $('#co-save').onclick = async () => {
-    const fields = ['name','legalForm','address','postalCode','city','country','siret','ape','email','phone','website','tvaRegime','tvaNumber','iban','bic','decennale','rcpro','insuranceContract','insuredActivity','defaultNotes','defaultExclusions','paymentTerms','latePenalties','laborUnit','quotePrefix','invoicePrefix','cgv','primaryColor'];
+    const fields = ['name','legalForm','address','postalCode','city','country','siret','ape','email','phone','website','tvaRegime','tvaNumber','iban','bic','decennale','rcpro','insuranceContract','insuredActivity','defaultNotes','defaultExclusions','paymentTerms','latePenalties','quotePrefix','invoicePrefix','cgv','primaryColor'];
     fields.forEach(f => { db.company[f] = $('#co-'+f).value; });
-    db.company.laborRate = Number($('#co-laborRate').value)||0;
-    db.company.materialCoef = Number($('#co-materialCoef').value)||1;
     db.company.nextQuoteNum = Number($('#co-nextQuoteNum').value)||1;
     db.company.nextInvoiceNum = Number($('#co-nextInvoiceNum').value)||1;
     await saveCompany(); toast('Paramètres enregistrés');
