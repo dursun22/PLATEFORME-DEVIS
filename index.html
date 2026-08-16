@@ -454,6 +454,7 @@ let db = {
   invoices: [],
   serviceItems: [], // bibliothèque de prestations réutilisables
   materials: [],    // catalogue matériaux fournisseurs
+  attachments: [],  // pièces jointes (PV signés, photos de chantier…)
 };
 
 function applyBranding() {
@@ -654,6 +655,14 @@ function attachListeners() {
     db.materials = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     setSync('ok'); render();
   }));
+
+  // Pièces jointes
+  unsubscribers.push(onSnapshot(collection(dbFs, 'workspace', 'main', 'attachments'), snap => {
+    db.attachments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setSync('ok');
+    const [section, action] = currentRoute();
+    if (!(action === 'new' || action === 'edit')) render();
+  }));
 }
 
 async function saveMaterial(m) {
@@ -699,7 +708,141 @@ async function saveDoc(d, kind) {
 }
 async function deleteDocById(id, kind) {
   const coll = kind === 'quote' ? 'quotes' : 'invoices';
+  for (const a of db.attachments.filter(x => x.docId === id)) await deleteAttachment(a.id);
   await deleteDoc(doc(dbFs, 'workspace', 'main', coll, id));
+}
+
+/* =============================================================
+   PIÈCES JOINTES — images compressées, stockées dans Firestore
+   ============================================================= */
+const PJ_MAX_OCTETS = 700000;   // marge sous la limite Firestore de 1 Mo
+
+function attachmentsOf(docId) {
+  return db.attachments.filter(a => a.docId === docId)
+    .sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+}
+
+/* Réduit une image jusqu'à passer sous la limite de taille */
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const draw = (w, h, q) => {
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h));
+        const x = c.getContext('2d');
+        x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+        x.drawImage(img, 0, 0, c.width, c.height);
+        return c.toDataURL('image/jpeg', q);
+      };
+      let w = img.naturalWidth, h = img.naturalHeight;
+      const MAX = 1800;
+      if (Math.max(w, h) > MAX) { const k = MAX / Math.max(w, h); w *= k; h *= k; }
+      let q = 0.82, out = draw(w, h, q);
+      while (out.length > PJ_MAX_OCTETS && q > 0.36) { q -= 0.08; out = draw(w, h, q); }
+      let scale = 1;
+      while (out.length > PJ_MAX_OCTETS && scale > 0.35) { scale -= 0.15; out = draw(w * scale, h * scale, 0.72); }
+      if (out.length > PJ_MAX_OCTETS) return reject(new Error('Image trop lourde même après compression'));
+      resolve(out);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Fichier image illisible')); };
+    img.src = url;
+  });
+}
+
+async function saveAttachment(a) {
+  setSync('syncing', 'Envoi…');
+  await setDoc(doc(dbFs, 'workspace', 'main', 'attachments', a.id), a);
+  setSync('ok');
+}
+async function deleteAttachment(id) {
+  await deleteDoc(doc(dbFs, 'workspace', 'main', 'attachments', id));
+}
+
+function fmtOctets(n) {
+  if (!n) return '';
+  return n < 1024*1024 ? Math.round(n/1024) + ' Ko' : (n/1048576).toFixed(1) + ' Mo';
+}
+
+/* Bloc « Pièces jointes » affiché sur la fiche d'un devis / d'une facture */
+function attachmentsCardHtml(docId) {
+  const list = attachmentsOf(docId);
+  return `<div class="card"><h3>📎 Pièces jointes ${list.length ? `<span style="color:var(--muted);font-weight:400">(${list.length})</span>` : ''}</h3>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">PV signé, photos de chantier, courriers… Les images sont compressées automatiquement.</div>
+    <label class="btn" style="display:inline-block;cursor:pointer;margin-bottom:12px">
+      ➕ Ajouter une photo ou un scan
+      <input type="file" id="pj-input" accept="image/*" multiple style="display:none">
+    </label>
+    <span id="pj-status" style="margin-left:10px;font-size:12px;color:var(--muted)"></span>
+    ${list.length === 0 ? '' : `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px">
+      ${list.map(a => `<div style="width:150px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--input-bg)">
+        <img src="${a.dataUrl}" alt="${escapeHtml(a.name||'')}" data-pj-open="${a.id}"
+             style="width:100%;height:110px;object-fit:cover;display:block;cursor:zoom-in">
+        <div style="padding:7px 9px">
+          <input data-pj-name="${a.id}" value="${escapeHtml(a.name||'')}"
+                 style="width:100%;font-size:11px;padding:4px 6px;margin:0 0 5px">
+          <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--muted)">
+            <span>${fmtDate(a.createdAt)} · ${fmtOctets(a.size)}</span>
+            <button class="btn btn-sm btn-danger" data-pj-del="${a.id}" style="padding:1px 6px">×</button>
+          </div>
+        </div></div>`).join('')}
+    </div>`}</div>`;
+}
+
+function bindAttachments(docId) {
+  const input = $('#pj-input'), status = $('#pj-status');
+  if (input) input.onchange = async () => {
+    const files = [...input.files];
+    input.value = '';
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      status.textContent = `Traitement ${i+1}/${files.length} — ${f.name}…`;
+      try {
+        const dataUrl = await compressImage(f);
+        await saveAttachment({
+          id: uid(), docId,
+          name: f.name.replace(/\.[^.]+$/, '').slice(0, 60),
+          size: dataUrl.length, createdAt: new Date().toISOString(),
+          createdBy: (currentUser && currentUser.email) || '', dataUrl
+        });
+      } catch (e) {
+        alert(`« ${f.name} » n'a pas pu être ajouté : ${e.message}`);
+      }
+    }
+    status.textContent = '';
+    toast(files.length > 1 ? `${files.length} pièces jointes ajoutées` : 'Pièce jointe ajoutée');
+  };
+
+  $('[data-pj-del]').forEach(b => b.onclick = async () => {
+    if (!confirm('Supprimer cette pièce jointe ?')) return;
+    await deleteAttachment(b.dataset.pjDel); toast('Pièce jointe supprimée');
+  });
+
+  $('[data-pj-name]').forEach(inp => inp.onchange = async () => {
+    const a = db.attachments.find(x => x.id === inp.dataset.pjName);
+    if (a) await saveAttachment({ ...a, name: inp.value.trim() });
+  });
+
+  $('[data-pj-open]').forEach(im => im.onclick = () => {
+    const a = db.attachments.find(x => x.id === im.dataset.pjOpen);
+    if (!a) return;
+    document.querySelectorAll('.preview-bg').forEach(n => n.remove());
+    const bg = document.createElement('div');
+    bg.className = 'preview-bg';
+    bg.innerHTML = `<div class="preview-bar">
+        <a class="btn btn-primary" href="${a.dataUrl}" download="${escapeHtml((a.name||'piece-jointe'))}.jpg">⬇ Télécharger</a>
+        <button class="btn" data-pj-close>✕ Fermer</button>
+        <span style="color:#a1a1aa;font-size:12px">${escapeHtml(a.name||'')}</span>
+      </div>
+      <div style="flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:20px">
+        <img src="${a.dataUrl}" style="max-width:100%;box-shadow:0 12px 40px rgba(0,0,0,.5);background:#fff">
+      </div>`;
+    document.body.appendChild(bg);
+    bg.querySelector('[data-pj-close]').onclick = () => bg.remove();
+    bg.onclick = (e) => { if (e.target === bg) bg.remove(); };
+  });
 }
 
 /* Public share = duplicate quote into 'publicQuotes' collection (publicly readable) */
@@ -1338,7 +1481,7 @@ function renderDocList(kind, mode) {
     <div class="card">${items.length === 0 ? emptyMsg : `
       <table><thead><tr><th>Numéro</th><th>Client</th><th>Date</th><th>Total HT</th><th>Total TTC</th><th>Statut</th><th></th></tr></thead><tbody>
       ${items.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(d => `<tr class="clickable" onclick="navigate('${route}/view/${d.id}')">
-        <td><strong>${escapeHtml(d.number||'—')}</strong></td><td>${escapeHtml(clientName(clientById(d.clientId)))}</td><td>${fmtDate(d.date)}</td>
+        <td><strong>${escapeHtml(d.number||'—')}</strong>${attachmentsOf(d.id).length ? ` <span title="pièces jointes" style="color:var(--muted);font-size:11px">📎${attachmentsOf(d.id).length}</span>` : ''}</td><td>${escapeHtml(clientName(clientById(d.clientId)))}</td><td>${fmtDate(d.date)}</td>
         <td>${fmtMoney(calcDoc(d).ht)}</td><td>${fmtMoney(calcDoc(d).ttc)}</td><td>${statusBadge(d.status, kind)}</td>
         <td style="text-align:right" onclick="event.stopPropagation()"><a class="btn btn-sm" href="#/${route}/edit/${d.id}">Modifier</a>
         <button class="btn btn-sm btn-danger" data-del-doc="${d.id}" data-kind="${kind}">×</button></td></tr>`).join('')}</tbody></table>`}</div>`;
@@ -1620,7 +1763,9 @@ function renderQuoteView(id, kind) {
       <div class="total-row"><span>Total HT</span><strong>${fmtMoney(totals.ht)}</strong></div>
       <div class="total-row"><span>Total TVA</span><strong>${fmtMoney(totals.tva)}</strong></div>
       <div class="total-row grand"><span>Total TTC</span><strong>${fmtMoney(totals.ttc)}</strong></div></div></div>
-    ${doc.conditions ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)"><h3>Conditions</h3><div style="white-space:pre-wrap">${escapeHtml(doc.conditions)}</div></div>` : ''}</div>`;
+    ${doc.conditions ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)"><h3>Conditions</h3><div style="white-space:pre-wrap">${escapeHtml(doc.conditions)}</div></div>` : ''}</div>
+    ${attachmentsCardHtml(doc.id)}`;
+  bindAttachments(doc.id);
   $('#btn-print').onclick = () => { renderPrintView(doc, kind); window.print(); };
   $('#btn-preview').onclick = () => showPreview(doc, kind);
   if ($('#btn-share')) $('#btn-share').onclick = async () => {
@@ -2021,7 +2166,7 @@ function renderPvList() {
     </div>
     <div class="card">${items.length === 0
       ? `<div class="empty"><h3>Aucun procès-verbal</h3><p>Ouvrez un devis, cliquez sur « 📋 PV de réception », renseignez-le puis enregistrez : il apparaîtra ici.</p></div>`
-      : `<table><thead><tr><th>Date d'effet</th><th>Client</th><th>Chantier</th><th>Devis</th><th>Réserves</th><th></th></tr></thead><tbody>
+      : `<table><thead><tr><th>Date d'effet</th><th>Client</th><th>Chantier</th><th>Devis</th><th>Réserves</th><th>PJ</th><th></th></tr></thead><tbody>
       ${items.map(q => {
         const c = clientById(q.clientId);
         const nb = (q.pv.quoteIds||[]).length;
@@ -2037,6 +2182,7 @@ function renderPvList() {
           <td>${escapeHtml((c && c.city) || '—')}</td>
           <td>${nb} devis${nb > 1 ? '' : ''} · ${escapeHtml(q.number||'')}</td>
           <td>${badge}</td>
+          <td>${attachmentsOf(q.id).length ? '📎 ' + attachmentsOf(q.id).length : '<span style="color:var(--muted)">—</span>'}</td>
           <td style="text-align:right" onclick="event.stopPropagation()">
             <a class="btn btn-sm" href="#/devis/pv/${q.id}">Ouvrir</a>
             <a class="btn btn-sm" href="#/devis/view/${q.id}">Devis</a></td></tr>`;
