@@ -214,6 +214,30 @@
   .sidebar-logo-img { max-width: 100%; max-height: 40px; margin-bottom: 12px; }
   .brand-color { color: var(--user-primary) !important; }
   .brand-bg { background: var(--user-primary) !important; }
+  /* ===== Procès-verbal de réception ===== */
+  .pv-sheet { position: relative; box-sizing: border-box; }
+  .pv-kicker { font-size: 8pt; font-weight: 700; color: var(--bp-amber-dark); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 2pt; }
+  .pv-h1 { font-size: 15pt; font-weight: 800; color: var(--bp-dark); letter-spacing: -0.02em; }
+  .pv-head { padding-left: 10pt; border-left: 4pt solid var(--bp-amber); margin: 4pt 0 14pt; }
+  .pv-body { font-size: 9pt; line-height: 1.7; color: #27272a; }
+  .pv-body p { margin: 0 0 7pt; }
+  .pv-lbl { color: #6b7280; }
+  .pv-fill { font-weight: 700; color: var(--bp-dark); }
+  .pv-dots { display: inline-block; border-bottom: .75pt dotted #9ca3af; min-width: 110pt; }
+  .pv-list { margin: 4pt 0 8pt; padding-left: 14pt; }
+  .pv-list li { margin-bottom: 2.5pt; font-size: 8.5pt; }
+  .pv-box { border: 1pt solid var(--bp-line); border-radius: 6pt; padding: 8pt 10pt; background: var(--bp-soft); margin: 8pt 0; font-size: 8.5pt; line-height: 1.5; }
+  .pv-box-title { font-weight: 800; text-transform: uppercase; font-size: 7pt; letter-spacing: .05em; color: var(--bp-dark); margin-bottom: 3pt; }
+  .pv-check { font-size: 9pt; margin: 5pt 0; }
+  .pv-square { display: inline-block; width: 9pt; height: 9pt; border: 1pt solid var(--bp-dark); margin-right: 5pt; vertical-align: -1pt; }
+  .pv-square.on { background: var(--bp-dark); }
+  .pv-line { border-bottom: .75pt dotted #9ca3af; height: 15pt; }
+  .pv-signs { display: flex; gap: 14pt; margin-top: 16pt; page-break-inside: avoid; }
+  .pv-sign { flex: 1; border: 1pt solid #c9cdd2; border-radius: 8pt; padding: 10pt 12pt; font-size: 8pt; color: #6b7280; background: #fff; }
+  .pv-sign-title { font-weight: 800; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em; color: var(--bp-amber); margin-bottom: 5pt; }
+  .pv-sign-who { font-weight: 700; color: var(--bp-dark); font-size: 9pt; margin-bottom: 2pt; }
+  .pv-sign-space { height: 70pt; }
+  .pv-page2 { page-break-before: always; }
   /* CGV page 2 */
   .print-cgv { page-break-before: always; background: #fff; position: relative; box-sizing: border-box; }
   .print-cgv h2 { font-size: 11pt; font-weight: 700; margin: 0 0 8pt; color: #111; text-align: center; text-transform: uppercase; letter-spacing: .03em; }
@@ -984,6 +1008,7 @@ function render() {
       if (action === 'new') return renderQuoteEditor(null, 'quote');
       if (action === 'edit' && id) return renderQuoteEditor(id, 'quote');
       if (action === 'view' && id) return renderQuoteView(id, 'quote');
+      if (action === 'pv' && id) return renderPvScreen(id);
       main.innerHTML = renderDocList('quote'); bindDocList('quote'); break;
     case 'devis-acceptes':
       main.innerHTML = renderDocList('quote', 'archive'); bindDocList('quote'); break;
@@ -1560,6 +1585,7 @@ function renderQuoteView(id, kind) {
     ${isQuote ? `<button class="btn" id="btn-share">🔗 Lien public / e-signature</button>` : ''}
     ${isQuote && doc.status === 'accepted' && !db.invoices.find(i => i.sourceQuoteId === doc.id && i.isDeposit) ? `<button class="btn" id="btn-deposit">💸 Générer facture acompte</button>` : ''}
     ${!isQuote && doc.status !== 'paid' ? `<button class="btn" id="btn-markpaid" style="background:var(--success);color:#fff;border-color:var(--success)">✓ Marquer comme payée</button>` : ''}
+    ${isQuote ? `<a class="btn" href="#/devis/pv/${doc.id}">📋 PV de réception</a>` : ''}
     <button class="btn" id="btn-preview">👁️ Aperçu</button>
     <button class="btn btn-primary" id="btn-print">⎙ Imprimer / PDF</button></div></div>
     <div class="card"><div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
@@ -1770,6 +1796,252 @@ function renderPrintView(doc, kind) {
 }
 
 /* Pagination dynamique : cale chaque section sur une page entière et pose un pied de page en bas de chaque page */
+/* =============================================================
+   PROCÈS-VERBAL DE RÉCEPTION DES TRAVAUX
+   ============================================================= */
+function emptyPv(doc) {
+  return { effectDate: today(), place: db.company.city || '', ownerName: '', ownerQuality: '',
+           quoteIds: [doc.id], exclusions: '', withReserves: false, reserves: '', leveeDate: '' };
+}
+function pvOf(doc) { return Object.assign(emptyPv(doc), doc.pv || {}); }
+/* Maître d'ouvrage : toujours une personne physique ; la société va dans la qualité. */
+function pvOwnerDefaults(client) {
+  if (!client) return { name: '', quality: '' };
+  const person = [client.civility, client.firstName, client.lastName].filter(Boolean).join(' ').trim();
+  if (client.type === 'pro' && client.companyName) {
+    return person
+      ? { name: person, quality: 'représentant la société ' + client.companyName }
+      : { name: client.companyName, quality: '' };
+  }
+  return { name: person || clientName(client), quality: '' };
+}
+
+function renderPvPrint(doc) {
+  const co = db.company, client = clientById(doc.clientId), pv = pvOf(doc);
+  const dots = (n) => `<span class="pv-dots" style="min-width:${n}pt"></span>`;
+
+  const quotes = (pv.quoteIds || [doc.id])
+    .map(id => db.quotes.find(q => q.id === id))
+    .filter(Boolean)
+    .sort((a,b) => (a.date||'').localeCompare(b.date||''));
+
+  const dft = pvOwnerDefaults(client);
+  const ownerName = pv.ownerName || dft.name;
+  const ownerQuality = pv.ownerQuality || dft.quality;
+  const site = [client && client.address, [client && client.postalCode, client && client.city].filter(Boolean).join(' ')]
+    .filter(Boolean).join(', ');
+
+  const coLines = [
+    [co.address, [co.postalCode, co.city].filter(Boolean).join(' ')].filter(Boolean).join(' '),
+    co.phone, co.email,
+    co.siret ? 'SIRET : ' + co.siret : ''
+  ].filter(Boolean);
+
+  const header = `
+    <div class="bp-header">
+      <div class="bp-header-left">
+        ${co.logo ? `<img class="bp-logo" src="${co.logo}">` : ''}
+        <div class="bp-co-info">
+          <div class="bp-co-name">${escapeHtml([co.legalForm, co.name].filter(Boolean).join(' '))}</div>
+          ${coLines.map(l => `<div>${escapeHtml(l)}</div>`).join('')}
+        </div>
+      </div>
+      <div class="bp-header-right">
+        <table class="bp-meta">
+          <tr><td class="bp-meta-lbl">Date d'effet</td><td>${pv.effectDate ? fmtDate(pv.effectDate) : '—'}</td></tr>
+          <tr><td class="bp-meta-lbl">Chantier</td><td>${escapeHtml((client && client.city) || '—')}</td></tr>
+        </table>
+      </div>
+    </div>`;
+
+  const entreprise = escapeHtml([co.legalForm, co.name].filter(Boolean).join(' ')) +
+    (co.siret ? ` (SIRET ${escapeHtml(co.siret)})` : '');
+
+  $('#print').innerHTML = `
+    <div class="bp-page1 pv-sheet">
+      ${header}
+      <div class="pv-head">
+        <div class="pv-kicker">Réception des travaux — article 1792-6 du Code civil</div>
+        <div class="pv-h1">Procès-verbal de réception</div>
+      </div>
+      <div class="pv-body">
+        <p>Je soussigné <span class="pv-lbl">(nom, prénom et qualité)</span> :
+          <span class="pv-fill">${escapeHtml(ownerName)}</span>${ownerQuality ? ', ' + escapeHtml(ownerQuality) : ''},</p>
+        <p>agissant comme maître de l'ouvrage <span class="pv-lbl">(identification du chantier)</span> :
+          <span class="pv-fill">${escapeHtml(site || '—')}</span>,</p>
+        <p>pour les travaux faisant l'objet des devis suivants, établis par ${entreprise} :</p>
+        <ul class="pv-list">
+          ${quotes.map(q => `<li>Devis n° <strong>${escapeHtml(q.number||'—')}</strong>${q.date ? ' du ' + fmtDate(q.date) : ''}${q.object ? ' — ' + escapeHtml(q.object) : ''} — ${fmtMoney(calcDoc(q).ttc)} TTC</li>`).join('')}
+        </ul>
+        ${pv.exclusions ? `<div class="pv-box"><div class="pv-box-title">Travaux exclus de la présente réception</div>${escapeHtml(pv.exclusions).replace(/\n/g,'<br>')}</div>` : ''}
+        <p>procède à leur réception en présence de <span class="pv-lbl">(désignation de l'entrepreneur)</span> :
+          <span class="pv-fill">${entreprise}</span>,</p>
+        <p>à effet du : <span class="pv-fill">${pv.effectDate ? fmtDate(pv.effectDate) : dots(120)}</span></p>
+
+        <div class="pv-check"><span class="pv-square ${pv.withReserves ? '' : 'on'}"></span> Cette réception est prononcée <strong>sans réserve</strong>.</div>
+        <div class="pv-check"><span class="pv-square ${pv.withReserves ? 'on' : ''}"></span> Cette réception est prononcée <strong>avec les réserves suivantes</strong> <span class="pv-lbl">(emplacement, objet, description)</span> :</div>
+        ${pv.withReserves && pv.reserves
+          ? `<div class="pv-box">${escapeHtml(pv.reserves).replace(/\n/g,'<br>')}</div>`
+          : `<div style="margin-top:5pt">${'<div class="pv-line"></div>'.repeat(5)}</div>`}
+
+        <p style="margin-top:10pt">Les désordres apparents non mentionnés au présent procès-verbal sont réputés acceptés.
+          La réception fixe le point de départ des garanties légales et rend le solde du prix exigible.</p>
+        <p>Fait en autant d'exemplaires que de parties, à
+          <span class="pv-fill">${escapeHtml(pv.place || '')}</span>${pv.place ? '' : dots(90)}
+          le <span class="pv-fill">${pv.effectDate ? fmtDate(pv.effectDate) : ''}</span>${pv.effectDate ? '' : dots(90)}.</p>
+      </div>
+      <div class="pv-signs">
+        <div class="pv-sign">
+          <div class="pv-sign-title">Le maître de l'ouvrage</div>
+          <div class="pv-sign-who">${escapeHtml(ownerName)}</div>
+          <div>Date et signature</div>
+          <div class="pv-sign-space"></div>
+        </div>
+        <div class="pv-sign">
+          <div class="pv-sign-title">L'entrepreneur</div>
+          <div class="pv-sign-who">${escapeHtml([co.legalForm, co.name].filter(Boolean).join(' '))}</div>
+          <div>Date et signature</div>
+          <div class="pv-sign-space"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-page2 pv-sheet">
+      ${header}
+      <div class="pv-head">
+        <div class="pv-kicker">Suite du procès-verbal de réception</div>
+        <div class="pv-h1">Procès-verbal de levée des réserves</div>
+      </div>
+      <div class="pv-body">
+        <p>Je soussigné <span class="pv-lbl">(nom, prénom et qualité)</span> :
+          <span class="pv-fill">${escapeHtml(ownerName)}</span>${ownerQuality ? ', ' + escapeHtml(ownerQuality) : ''},</p>
+        <p>agissant en qualité de maître de l'ouvrage, donne acte à l'entrepreneur ${entreprise}
+          de la <strong>levée des réserves</strong> mentionnées au procès-verbal de réception du
+          <span class="pv-fill">${pv.effectDate ? fmtDate(pv.effectDate) : dots(90)}</span>,</p>
+        <p>à effet du : ${pv.leveeDate ? `<span class="pv-fill">${fmtDate(pv.leveeDate)}</span>` : dots(140)}</p>
+        <p>Observations éventuelles :</p>
+        ${'<div class="pv-line"></div>'.repeat(4)}
+        <p style="margin-top:10pt">Fait à ${dots(90)} le ${dots(90)}.</p>
+      </div>
+      <div class="pv-signs">
+        <div class="pv-sign">
+          <div class="pv-sign-title">Le maître de l'ouvrage</div>
+          <div class="pv-sign-who">${escapeHtml(ownerName)}</div>
+          <div>Date et signature</div>
+          <div class="pv-sign-space"></div>
+        </div>
+        <div class="pv-sign">
+          <div class="pv-sign-title">L'entrepreneur</div>
+          <div class="pv-sign-who">${escapeHtml([co.legalForm, co.name].filter(Boolean).join(' '))}</div>
+          <div>Date et signature</div>
+          <div class="pv-sign-space"></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showPvPreview(doc) {
+  renderPvPrint(doc);
+  const src = document.getElementById('print');
+  const pages = [...src.querySelectorAll('.pv-sheet')];
+  document.querySelectorAll('.preview-bg').forEach(n => n.remove());
+  const bg = document.createElement('div');
+  bg.className = 'preview-bg';
+  bg.innerHTML = `
+    <div class="preview-bar">
+      <button class="btn btn-primary" data-pv-print>⎙ Imprimer / PDF</button>
+      <button class="btn" data-pv-close>✕ Fermer</button>
+      <span style="color:#a1a1aa;font-size:12px">Procès-verbal de réception</span>
+    </div>
+    <iframe class="preview-frame" title="Aperçu PV"></iframe>`;
+  document.body.appendChild(bg);
+  const legal = [db.company.legalForm, db.company.name].filter(Boolean).join(' ')
+    + (db.company.siret ? ' — SIRET ' + db.company.siret : '');
+  const frame = bg.querySelector('.preview-frame');
+  const d = frame.contentDocument;
+  d.open();
+  d.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    html,body{margin:0;padding:0;background:#4a4a52;}
+    .sheet{position:relative;width:210mm;min-height:297mm;padding:14mm 15mm 16mm;box-sizing:border-box;
+      background:#fff;color:#111;margin:0 auto 20px;box-shadow:0 12px 40px rgba(0,0,0,.5);
+      font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;font-size:10pt;}
+    .sheet table{border-collapse:collapse;}
+    .pv-page2{page-break-before:auto;}
+    ${pdfStylesheet()}
+  </style></head><body>
+    ${pages.map((pg,i) => `<div class="sheet">${pg.innerHTML}
+      <div class="bp-footer" style="position:absolute;left:15mm;right:15mm;bottom:8mm">
+        <span>${escapeHtml(legal)}</span><span>Page ${i+1}/${pages.length}</span></div></div>`).join('')}
+  </body></html>`);
+  d.close();
+  bg.querySelector('[data-pv-close]').onclick = () => bg.remove();
+  bg.querySelector('[data-pv-print]').onclick = () => { bg.remove(); renderPvPrint(doc); window.print(); };
+  bg.onclick = (e) => { if (e.target === bg) bg.remove(); };
+}
+
+function renderPvScreen(id) {
+  const doc = db.quotes.find(q => q.id === id);
+  if (!doc) { $('#main').innerHTML = `<div class="card empty"><h3>Devis introuvable</h3></div>`; return; }
+  const client = clientById(doc.clientId);
+  const pv = pvOf(doc);
+  const sameClient = db.quotes.filter(q => q.clientId === doc.clientId)
+    .sort((a,b) => (a.date||'').localeCompare(b.date||''));
+
+  $('#main').innerHTML = `<div class="topbar"><h1>📋 PV de réception — ${escapeHtml(doc.number||'')}</h1>
+    <div class="actions"><a class="btn" href="#/devis/view/${doc.id}">← Retour</a>
+      <button class="btn" id="pv-save">Enregistrer</button>
+      <button class="btn btn-primary" id="pv-preview">👁️ Aperçu / Imprimer</button></div></div>
+
+    <div class="card"><h3>Maître de l'ouvrage</h3>
+      <div class="form-row cols-2">
+        <div><label>Nom et prénom</label><input id="pv-owner" value="${escapeHtml(pv.ownerName || pvOwnerDefaults(client).name)}"></div>
+        <div><label>Qualité (ex. Président de la SASU X, propriétaire…)</label><input id="pv-quality" value="${escapeHtml(pv.ownerQuality || pvOwnerDefaults(client).quality)}" placeholder="laisser vide si particulier"></div>
+      </div>
+      <div class="form-row cols-2">
+        <div><label>Date d'effet de la réception</label><input type="date" id="pv-date" value="${pv.effectDate||today()}"></div>
+        <div><label>Fait à</label><input id="pv-place" value="${escapeHtml(pv.place||db.company.city||'')}"></div>
+      </div>
+    </div>
+
+    <div class="card"><h3>Devis réceptionnés</h3>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Cochez tous les devis de ce client couverts par ce procès-verbal.</div>
+      ${sameClient.map(q => `<label style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox" data-pv-q="${q.id}" ${(pv.quoteIds||[]).includes(q.id) ? 'checked' : ''} style="width:auto;margin:0">
+        <span><strong>${escapeHtml(q.number||'—')}</strong> ${q.date ? '· ' + fmtDate(q.date) : ''} ${q.object ? '· ' + escapeHtml(q.object) : ''}
+        <span style="color:var(--muted)">· ${fmtMoney(calcDoc(q).ttc)} TTC</span></span></label>`).join('')}
+      <label style="margin-top:14px">Travaux exclus de cette réception (optionnel)</label>
+      <textarea id="pv-exclusions" rows="3" placeholder="ex. Sont exclus : les travaux du devis n° 52-2026 (dalle béton), suspendus dans l'attente de l'étude géotechnique à la charge du maître d'ouvrage.">${escapeHtml(pv.exclusions||'')}</textarea>
+    </div>
+
+    <div class="card"><h3>Réserves</h3>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+        <input type="checkbox" id="pv-with-reserves" ${pv.withReserves ? 'checked' : ''} style="width:auto;margin:0">
+        <span>Réception prononcée <strong>avec réserves</strong> (sinon : sans réserve)</span></label>
+      <label style="margin-top:12px">Liste des réserves (emplacement, objet, description)</label>
+      <textarea id="pv-reserves" rows="4" placeholder="Laissez vide pour imprimer des lignes à remplir à la main sur le chantier.">${escapeHtml(pv.reserves||'')}</textarea>
+      <label style="margin-top:12px">Date de levée des réserves (page 2, optionnel)</label>
+      <input type="date" id="pv-levee" value="${pv.leveeDate||''}" style="max-width:220px">
+    </div>`;
+
+  const collect = () => ({
+    ownerName: $('#pv-owner').value.trim(),
+    ownerQuality: $('#pv-quality').value.trim(),
+    effectDate: $('#pv-date').value,
+    place: $('#pv-place').value.trim(),
+    quoteIds: [...document.querySelectorAll('[data-pv-q]')].filter(c => c.checked).map(c => c.dataset.pvQ),
+    exclusions: $('#pv-exclusions').value.trim(),
+    withReserves: $('#pv-with-reserves').checked,
+    reserves: $('#pv-reserves').value.trim(),
+    leveeDate: $('#pv-levee').value
+  });
+
+  $('#pv-save').onclick = async () => {
+    await saveDoc({ ...doc, pv: collect() }, 'quote');
+    toast('PV enregistré');
+  };
+  $('#pv-preview').onclick = () => showPvPreview({ ...doc, pv: collect() });
+}
+
 function paginatePrintView() {
   const el = document.getElementById('print');
   if (!el) return;
