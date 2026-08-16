@@ -974,7 +974,7 @@ function openSheetsPreview(build, libelle, imprimer) {
     const reduites = Array.from(d.querySelectorAll('.sheet'))
       .map((sh, i) => ({ i: i + 1, f: sh.querySelector('.sheet-fit') }))
       .map(x => ({ i: x.i, pct: x.f ? x.f.getAttribute('data-reduit') : null }))
-      .filter(x => x.pct);
+      .filter(x => x.pct && Number(x.pct) < 98);   // on ne signale qu'une réduction visible
     if (reduites.length) {
       const w = document.createElement('span');
       w.style.cssText = 'color:#f59e0b;font-size:12px;font-weight:600';
@@ -2375,8 +2375,9 @@ function fitSheetsToPageImpl(el) {
     const cs = getComputedStyle(sh);
     const dispo = a4 - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
     const besoin = fit.scrollHeight;
-    if (besoin > dispo + 1) {
+    if (besoin > dispo + 4) {
       const k = Math.max(0.55, dispo / besoin);
+      if (k > 0.995) return;   // écart négligeable : inutile de toucher au rendu
       fit.style.transformOrigin = 'top left';
       fit.style.transform = 'scale(' + k.toFixed(4) + ')';
       fit.style.width = (100 / k).toFixed(2) + '%';
