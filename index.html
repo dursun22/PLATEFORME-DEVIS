@@ -481,7 +481,7 @@ function darkenColor(hex, pct) {
 }
 function defaultCompany() {
   return { name: '', legalForm: 'EI', address: '', postalCode: '', city: '', country: 'France',
-    siret: '', ape: '', email: '', phone: '', website: '', iban: '', bic: '',
+    siret: '', ape: '', email: '', phone: '', website: '', iban: '', bic: '', accountHolder: '', bankName: '',
     tvaRegime: 'franchise', tvaNumber: '', decennale: '', rcpro: '', insuranceContract: '', insuredActivity: '', defaultNotes: '', defaultExclusions: '', paymentTerms: '', latePenalties: '', laborRate: 0, laborUnit: 'heure', materialCoef: 1,
     nextQuoteNum: 1, nextInvoiceNum: 1, quotePrefix: 'DEV', invoicePrefix: 'FAC', cgv: '', logo: '', primaryColor: '#3b82f6', accentColor: '#60a5fa' };
 }
@@ -1912,7 +1912,14 @@ function renderPrintView(doc, kind) {
         <div class="bp-block">
           <div class="bp-block-title">Instructions de paiement</div>
           ${co.paymentTerms ? `<div style="white-space:pre-wrap">${escapeHtml(co.paymentTerms)}</div>` : ''}
-          ${co.iban ? `<div style="margin-top:3pt">IBAN : ${escapeHtml(co.iban)}${co.bic?' — BIC : '+escapeHtml(co.bic):''}</div>` : ''}
+          ${co.iban ? `<div style="margin-top:4pt">
+            <div style="font-weight:700;color:var(--bp-dark)">Coordonnées bancaires</div>
+            ${co.accountHolder ? `<div>Titulaire : ${escapeHtml(co.accountHolder)}</div>` : ''}
+            <div>IBAN : ${escapeHtml(co.iban)}</div>
+            ${co.bic ? `<div>BIC : ${escapeHtml(co.bic)}</div>` : ''}
+            ${co.bankName ? `<div>Banque : ${escapeHtml(co.bankName)}</div>` : ''}
+            <div style="margin-top:2pt">Merci d'indiquer le n° ${escapeHtml(doc.number||'')} en référence du virement.</div>
+          </div>` : ''}
           ${co.latePenalties ? `<div style="margin-top:4pt;white-space:pre-wrap">${escapeHtml(co.latePenalties)}</div>` : ''}
         </div>` : ''}
       </div>
@@ -2394,7 +2401,9 @@ function renderSettings() {
       <h3>TVA</h3>
       <div class="form-row"><div><label>Régime de TVA</label><select id="co-tvaRegime"><option value="franchise" ${c.tvaRegime==='franchise'?'selected':''}>Franchise en base</option><option value="normal" ${c.tvaRegime==='normal'?'selected':''}>Régime normal</option></select></div><div><label>N° TVA</label><input id="co-tvaNumber" value="${escapeHtml(c.tvaNumber)}"></div></div>
       <h3>Bancaire</h3>
-      <div class="form-row"><div><label>IBAN</label><input id="co-iban" value="${escapeHtml(c.iban)}"></div><div><label>BIC</label><input id="co-bic" value="${escapeHtml(c.bic)}"></div></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Ces informations sont imprimées sur vos devis et factures pour que le client puisse faire le virement sans rien vous redemander.</div>
+      <div class="form-row"><div><label>IBAN</label><input id="co-iban" value="${escapeHtml(c.iban)}" placeholder="FR76 3008 7336 5500 0837 0790 281"></div><div><label>BIC</label><input id="co-bic" value="${escapeHtml(c.bic)}" placeholder="CMCIFRPP"></div></div>
+      <div class="form-row"><div><label>Titulaire du compte</label><input id="co-accountHolder" value="${escapeHtml(c.accountHolder||'')}" placeholder="M. Dursun YASLIOGLU"></div><div><label>Banque (domiciliation)</label><input id="co-bankName" value="${escapeHtml(c.bankName||'')}" placeholder="CIC Thaon-les-Vosges"></div></div>
       <h3>Mentions légales</h3>
       <div class="form-row cols-1"><div><label>Assureur décennale (nom + adresse complète)</label><input id="co-decennale" value="${escapeHtml(c.decennale)}" placeholder="ex. FIDELIDADE - COMPANHIA DE SEGUROS S.A, Tour Aurore, 18 Place des Reflets, 92976 PARIS LA DÉFENSE CEDEX"></div></div>
       <div class="form-row"><div><label>N° de contrat d'assurance</label><input id="co-insuranceContract" value="${escapeHtml(c.insuranceContract||'')}" placeholder="ex. CRCD01-044704"></div><div><label>RC Pro (si assureur différent)</label><input id="co-rcpro" value="${escapeHtml(c.rcpro)}"></div></div>
@@ -2454,7 +2463,7 @@ function renderSettings() {
   }
 
   $('#co-save').onclick = async () => {
-    const fields = ['name','legalForm','address','postalCode','city','country','siret','ape','email','phone','website','tvaRegime','tvaNumber','iban','bic','decennale','rcpro','insuranceContract','insuredActivity','defaultNotes','defaultExclusions','paymentTerms','latePenalties','quotePrefix','invoicePrefix','cgv','primaryColor'];
+    const fields = ['name','legalForm','address','postalCode','city','country','siret','ape','email','phone','website','tvaRegime','tvaNumber','iban','bic','accountHolder','bankName','decennale','rcpro','insuranceContract','insuredActivity','defaultNotes','defaultExclusions','paymentTerms','latePenalties','quotePrefix','invoicePrefix','cgv','primaryColor'];
     fields.forEach(f => { db.company[f] = $('#co-'+f).value; });
     db.company.nextQuoteNum = Number($('#co-nextQuoteNum').value)||1;
     db.company.nextInvoiceNum = Number($('#co-nextInvoiceNum').value)||1;
