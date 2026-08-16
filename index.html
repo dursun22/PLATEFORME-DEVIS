@@ -344,7 +344,9 @@ service cloud.firestore {
     <nav id="nav">
       <a data-route="dashboard"><span>📊</span> Tableau de bord</a>
       <a data-route="devis"><span>📄</span> Devis</a>
+      <a data-route="devis-acceptes"><span>✅</span> Devis acceptés</a>
       <a data-route="factures"><span>🧾</span> Factures</a>
+      <a data-route="factures-payees"><span>💰</span> Factures payées</a>
       <a data-route="clients"><span>👥</span> Clients</a>
       <a data-route="library"><span>📚</span> Bibliothèque</a>
       <a data-route="materiaux"><span>🧱</span> Matériaux</a>
@@ -983,11 +985,15 @@ function render() {
       if (action === 'edit' && id) return renderQuoteEditor(id, 'quote');
       if (action === 'view' && id) return renderQuoteView(id, 'quote');
       main.innerHTML = renderDocList('quote'); bindDocList('quote'); break;
+    case 'devis-acceptes':
+      main.innerHTML = renderDocList('quote', 'archive'); bindDocList('quote'); break;
     case 'factures':
       if (action === 'new') return renderQuoteEditor(null, 'invoice');
       if (action === 'edit' && id) return renderQuoteEditor(id, 'invoice');
       if (action === 'view' && id) return renderQuoteView(id, 'invoice');
       main.innerHTML = renderDocList('invoice'); bindDocList('invoice'); break;
+    case 'factures-payees':
+      main.innerHTML = renderDocList('invoice', 'archive'); bindDocList('invoice'); break;
     case 'clients':
       if (action === 'new' || (action === 'edit' && id)) return renderClientEditor(id);
       main.innerHTML = renderClientList(); bindClientList(); break;
@@ -1266,16 +1272,38 @@ function renderServiceItemEditor(id) {
 function docCollection(kind) { return kind === 'quote' ? db.quotes : db.invoices; }
 function docRoute(kind) { return kind === 'quote' ? 'devis' : 'factures'; }
 function docLabel(kind, plural) { return kind === 'quote' ? (plural?'Devis':'devis') : (plural?'Factures':'facture'); }
+/* ===== Archives : un document quitte la liste courante dès qu'il est accepté / payé ===== */
+function archivedStatus(kind) { return kind === 'quote' ? 'accepted' : 'paid'; }
+function isArchived(doc, kind) { return doc.status === archivedStatus(kind); }
+function activeDocs(kind) { return docCollection(kind).filter(d => !isArchived(d, kind)); }
+function archivedDocs(kind) { return docCollection(kind).filter(d => isArchived(d, kind)); }
+function archiveRoute(kind) { return kind === 'quote' ? 'devis-acceptes' : 'factures-payees'; }
 function statusBadge(status, kind) {
   const map = kind === 'quote' ? { draft:['Brouillon','badge-draft'], sent:['Envoyé','badge-sent'], accepted:['Accepté','badge-accepted'], refused:['Refusé','badge-refused'] } : { draft:['Brouillon','badge-draft'], sent:['Envoyé','badge-sent'], paid:['Payé','badge-paid'], overdue:['En retard','badge-overdue'] };
   const [label, cls] = map[status] || ['—','badge-draft'];
   return `<span class="badge ${cls}">${label}</span>`;
 }
 
-function renderDocList(kind) {
-  const items = docCollection(kind), route = docRoute(kind);
-  return `<div class="topbar"><h1>${docLabel(kind, true)}</h1><a class="btn btn-primary" href="#/${route}/new">+ ${kind==='quote'?'Nouveau devis':'Nouvelle facture'}</a></div>
-    <div class="card">${items.length === 0 ? `<div class="empty"><h3>Aucun ${docLabel(kind)}</h3><p>Créez-en un pour démarrer.</p></div>` : `
+function renderDocList(kind, mode) {
+  const archive = mode === 'archive';
+  const items = archive ? archivedDocs(kind) : activeDocs(kind);
+  const route = docRoute(kind);
+  const title = archive ? (kind==='quote' ? '✅ Devis acceptés' : '💰 Factures payées') : docLabel(kind, true);
+  const totalHT = items.reduce((s,d) => s + calcDoc(d).ht, 0);
+  const totalTTC = items.reduce((s,d) => s + calcDoc(d).ttc, 0);
+  const head = archive
+    ? `<div class="topbar"><h1>${title}</h1></div>
+       <div class="card" style="margin-bottom:16px;display:flex;gap:32px;flex-wrap:wrap;align-items:center">
+         <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">${kind==='quote'?'Devis acceptés':'Factures payées'}</div><div style="font-size:22px;font-weight:700">${items.length}</div></div>
+         <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Total HT</div><div style="font-size:22px;font-weight:700;color:var(--accent)">${fmtMoney(totalHT)}</div></div>
+         <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Total TTC</div><div style="font-size:22px;font-weight:700">${fmtMoney(totalTTC)}</div></div>
+       </div>`
+    : `<div class="topbar"><h1>${title}</h1><a class="btn btn-primary" href="#/${route}/new">+ ${kind==='quote'?'Nouveau devis':'Nouvelle facture'}</a></div>`;
+  const emptyMsg = archive
+    ? `<div class="empty"><h3>Aucun ${kind==='quote'?'devis accepté':'facture payée'}</h3><p>${kind==='quote'?'Passez un devis au statut « Accepté » et il arrivera ici automatiquement.':'Passez une facture au statut « Payé » et elle arrivera ici automatiquement.'}</p></div>`
+    : `<div class="empty"><h3>Aucun ${docLabel(kind)} en cours</h3><p>Créez-en un pour démarrer.</p></div>`;
+  return head + `
+    <div class="card">${items.length === 0 ? emptyMsg : `
       <table><thead><tr><th>Numéro</th><th>Client</th><th>Date</th><th>Total HT</th><th>Total TTC</th><th>Statut</th><th></th></tr></thead><tbody>
       ${items.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(d => `<tr class="clickable" onclick="navigate('${route}/view/${d.id}')">
         <td><strong>${escapeHtml(d.number||'—')}</strong></td><td>${escapeHtml(clientName(clientById(d.clientId)))}</td><td>${fmtDate(d.date)}</td>
@@ -1511,7 +1539,10 @@ function renderQuoteEditor(id, kind) {
       if (!doc.lines.length || !doc.lines.some(l => Number(l.unitPrice) > 0 || l.description.trim())) { alert('Ajoutez au moins une ligne.'); return; }
       await saveDoc(doc, kind);
       if (!editing) { db.company[isQuote ? 'nextQuoteNum' : 'nextInvoiceNum'] = (Number(db.company[isQuote ? 'nextQuoteNum' : 'nextInvoiceNum'])||1) + 1; await saveCompany(); }
-      navigate(`${route}/view/${doc.id}`); toast('Enregistré');
+      navigate(`${route}/view/${doc.id}`);
+      toast(isArchived(doc, kind)
+        ? (isQuote ? 'Enregistré — classé dans « Devis acceptés »' : 'Enregistré — classé dans « Factures payées »')
+        : 'Enregistré');
     };
     $('#doc-save').onclick = saveFn; $('#doc-save-2').onclick = saveFn;
   }
@@ -1523,8 +1554,9 @@ function renderQuoteView(id, kind) {
   const doc = collection.find(d => d.id === id);
   if (!doc) { $('#main').innerHTML = `<div class="card empty"><h3>Document introuvable</h3></div>`; return; }
   const client = clientById(doc.clientId), totals = calcDoc(doc);
+  const backRoute = isArchived(doc, kind) ? archiveRoute(kind) : route;
   $('#main').innerHTML = `<div class="topbar"><h1>${isQuote?'Devis':'Facture'} ${escapeHtml(doc.number)}</h1>
-    <div class="actions"><a class="btn" href="#/${route}">← Retour</a><a class="btn" href="#/${route}/edit/${doc.id}">Modifier</a>
+    <div class="actions"><a class="btn" href="#/${backRoute}">← Retour</a><a class="btn" href="#/${route}/edit/${doc.id}">Modifier</a>
     ${isQuote ? `<button class="btn" id="btn-share">🔗 Lien public / e-signature</button>` : ''}
     ${isQuote && doc.status === 'accepted' && !db.invoices.find(i => i.sourceQuoteId === doc.id && i.isDeposit) ? `<button class="btn" id="btn-deposit">💸 Générer facture acompte</button>` : ''}
     ${!isQuote && doc.status !== 'paid' ? `<button class="btn" id="btn-markpaid" style="background:var(--success);color:#fff;border-color:var(--success)">✓ Marquer comme payée</button>` : ''}
@@ -1563,7 +1595,7 @@ function renderQuoteView(id, kind) {
   if ($('#btn-markpaid')) $('#btn-markpaid').onclick = async () => {
     const updated = { ...doc, status: 'paid', paidAt: today() };
     await saveDoc(updated, kind);
-    toast('Facture marquée comme payée');
+    toast('Facture payée — classée dans « Factures payées »');
   };
 }
 
