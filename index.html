@@ -238,6 +238,7 @@
   .pv-sign-who { font-weight: 700; color: var(--bp-dark); font-size: 9pt; margin-bottom: 2pt; }
   .pv-sign-space { height: 70pt; }
   .pv-page2 { page-break-before: always; }
+  .pv-break { page-break-before: always; }
   /* CGV page 2 */
   .print-cgv { page-break-before: always; background: #fff; position: relative; box-sizing: border-box; }
   .print-cgv h2 { font-size: 11pt; font-weight: 700; margin: 0 0 8pt; color: #111; text-align: center; text-transform: uppercase; letter-spacing: .03em; }
@@ -788,6 +789,7 @@ function showPreview(doc, kind) {
   const src = document.getElementById('print');
   const page1 = src.querySelector('.bp-page1');
   const cgv = src.querySelector('.print-cgv');
+  const pvSheets = [...src.querySelectorAll('.pv-sheet')];
 
   const clean = (node) => {
     if (!node) return '';
@@ -810,7 +812,7 @@ function showPreview(doc, kind) {
 
   const legal = [db.company.legalForm, db.company.name].filter(Boolean).join(' ')
     + (db.company.siret ? ' — SIRET ' + db.company.siret : '');
-  const nbPages = cgv ? 2 : 1;
+  const nbPages = 1 + (cgv ? 1 : 0) + pvSheets.length;
   const footer = (i) => `<div class="bp-footer" style="position:absolute;left:15mm;right:15mm;bottom:8mm">
       <span>${escapeHtml(legal)}</span><span>Page ${i}/${nbPages}</span></div>`;
 
@@ -824,10 +826,12 @@ function showPreview(doc, kind) {
       font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;font-size:10pt;}
     .sheet table{border-collapse:collapse;}
     .print-cgv{page-break-before:auto;}
+    .pv-page2,.pv-break{page-break-before:auto;}
     ${pdfStylesheet()}
   </style></head><body>
     <div class="sheet">${clean(page1)}${footer(1)}</div>
     ${cgv ? `<div class="sheet"><div class="print-cgv">${clean(cgv)}</div>${footer(2)}</div>` : ''}
+    ${pvSheets.map((pg, i) => `<div class="sheet">${clean(pg)}${footer(i + 2 + (cgv ? 1 : 0))}</div>`).join('')}
   </body></html>`);
   d.close();
 
@@ -1428,6 +1432,12 @@ function renderQuoteEditor(id, kind) {
         <div class="form-row"><div><label>Statut</label><select id="doc-status">
           ${(isQuote ? [['draft','Brouillon'],['sent','Envoyé'],['accepted','Accepté'],['refused','Refusé']] : [['draft','Brouillon'],['sent','Envoyé'],['paid','Payé'],['overdue','En retard']]).map(([v,l]) => `<option value="${v}" ${v===doc.status?'selected':''}>${l}</option>`).join('')}
         </select></div><div></div></div>
+        ${isQuote ? `<h3>Document à joindre</h3>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 0">
+          <input type="checkbox" id="doc-attach-pv" ${doc.attachPv ? 'checked' : ''} style="width:auto;margin:0">
+          <span>Joindre le <strong>procès-verbal de réception</strong> à la fin du devis imprimé (après les CGV)</span>
+        </label>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Le contenu du PV se règle depuis la fiche du devis → bouton « 📋 PV de réception ».</div>` : ''}
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><a class="btn" href="#/${route}">Annuler</a><button class="btn btn-primary" id="doc-save-2">Enregistrer</button></div>`;
 
@@ -1560,6 +1570,7 @@ function renderQuoteEditor(id, kind) {
       else doc.dueDate = $('#doc-due').value;
       doc.object = $('#doc-object').value.trim(); doc.clientId = $('#doc-client').value;
       doc.conditions = $('#doc-conditions').value; doc.exclusions = $('#doc-exclusions').value; doc.status = $('#doc-status').value;
+      if ($('#doc-attach-pv')) doc.attachPv = $('#doc-attach-pv').checked;
       if (!doc.clientId) { alert('Sélectionnez un client.'); return; }
       if (!doc.lines.length || !doc.lines.some(l => Number(l.unitPrice) > 0 || l.description.trim())) { alert('Ajoutez au moins une ligne.'); return; }
       await saveDoc(doc, kind);
@@ -1790,7 +1801,8 @@ function renderPrintView(doc, kind) {
     </div>
 
     <!-- ============ CGV (page suivante) ============ -->
-    ${co.cgv ? `<div class="print-cgv"><h2>Conditions Générales de Vente et de Travaux</h2><div class="print-cgv-body">${formatCgvBody(co.cgv)}</div></div>` : ''}`;
+    ${co.cgv ? `<div class="print-cgv"><h2>Conditions Générales de Vente et de Travaux</h2><div class="print-cgv-body">${formatCgvBody(co.cgv)}</div></div>` : ''}
+    ${isQuote && doc.attachPv ? pvPagesHtml(doc, false) : ''}`;
 
   paginatePrintView();
 }
@@ -1816,7 +1828,9 @@ function pvOwnerDefaults(client) {
   return { name: person || clientName(client), quality: '' };
 }
 
-function renderPvPrint(doc) {
+function renderPvPrint(doc) { $('#print').innerHTML = pvPagesHtml(doc, true); }
+
+function pvPagesHtml(doc, standalone) {
   const co = db.company, client = clientById(doc.clientId), pv = pvOf(doc);
   const dots = (n) => `<span class="pv-dots" style="min-width:${n}pt"></span>`;
 
@@ -1857,8 +1871,8 @@ function renderPvPrint(doc) {
   const entreprise = escapeHtml([co.legalForm, co.name].filter(Boolean).join(' ')) +
     (co.siret ? ` (SIRET ${escapeHtml(co.siret)})` : '');
 
-  $('#print').innerHTML = `
-    <div class="bp-page1 pv-sheet">
+  return `
+    <div class="pv-sheet${standalone ? '' : ' pv-break'}">
       ${header}
       <div class="pv-head">
         <div class="pv-kicker">Réception des travaux — article 1792-6 du Code civil</div>
@@ -1871,16 +1885,16 @@ function renderPvPrint(doc) {
           <span class="pv-fill">${escapeHtml(site || '—')}</span>,</p>
         <p>pour les travaux faisant l'objet des devis suivants, établis par ${entreprise} :</p>
         <ul class="pv-list">
-          ${quotes.map(q => `<li>Devis n° <strong>${escapeHtml(q.number||'—')}</strong>${q.date ? ' du ' + fmtDate(q.date) : ''}${q.object ? ' — ' + escapeHtml(q.object) : ''} — ${fmtMoney(calcDoc(q).ttc)} TTC</li>`).join('')}
+          ${quotes.map(q => `<li>Devis n° <strong>${escapeHtml(q.number||'—')}</strong>${q.date ? ' du ' + fmtDate(q.date) : ''}${q.object ? ' — ' + escapeHtml(q.object) : ''} — ${fmtMoney(calcDoc(q).ht)} HT</li>`).join('')}
         </ul>
         ${pv.exclusions ? `<div class="pv-box"><div class="pv-box-title">Travaux exclus de la présente réception</div>${escapeHtml(pv.exclusions).replace(/\n/g,'<br>')}</div>` : ''}
         <p>procède à leur réception en présence de <span class="pv-lbl">(désignation de l'entrepreneur)</span> :
           <span class="pv-fill">${entreprise}</span>,</p>
         <p>à effet du : <span class="pv-fill">${pv.effectDate ? fmtDate(pv.effectDate) : dots(120)}</span></p>
 
-        <div class="pv-check"><span class="pv-square ${pv.withReserves ? '' : 'on'}"></span> Cette réception est prononcée <strong>sans réserve</strong>.</div>
-        <div class="pv-check"><span class="pv-square ${pv.withReserves ? 'on' : ''}"></span> Cette réception est prononcée <strong>avec les réserves suivantes</strong> <span class="pv-lbl">(emplacement, objet, description)</span> :</div>
-        ${pv.withReserves && pv.reserves
+        <div class="pv-check"><span class="pv-square"></span> Cette réception est prononcée <strong>sans réserve</strong>.</div>
+        <div class="pv-check"><span class="pv-square"></span> Cette réception est prononcée <strong>avec les réserves suivantes</strong> <span class="pv-lbl">(emplacement, objet, description)</span> :</div>
+        ${pv.reserves
           ? `<div class="pv-box">${escapeHtml(pv.reserves).replace(/\n/g,'<br>')}</div>`
           : `<div style="margin-top:5pt">${'<div class="pv-line"></div>'.repeat(5)}</div>`}
 
@@ -2008,16 +2022,14 @@ function renderPvScreen(id) {
       ${sameClient.map(q => `<label style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer">
         <input type="checkbox" data-pv-q="${q.id}" ${(pv.quoteIds||[]).includes(q.id) ? 'checked' : ''} style="width:auto;margin:0">
         <span><strong>${escapeHtml(q.number||'—')}</strong> ${q.date ? '· ' + fmtDate(q.date) : ''} ${q.object ? '· ' + escapeHtml(q.object) : ''}
-        <span style="color:var(--muted)">· ${fmtMoney(calcDoc(q).ttc)} TTC</span></span></label>`).join('')}
+        <span style="color:var(--muted)">· ${fmtMoney(calcDoc(q).ht)} HT</span></span></label>`).join('')}
       <label style="margin-top:14px">Travaux exclus de cette réception (optionnel)</label>
       <textarea id="pv-exclusions" rows="3" placeholder="ex. Sont exclus : les travaux du devis n° 52-2026 (dalle béton), suspendus dans l'attente de l'étude géotechnique à la charge du maître d'ouvrage.">${escapeHtml(pv.exclusions||'')}</textarea>
     </div>
 
     <div class="card"><h3>Réserves</h3>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-        <input type="checkbox" id="pv-with-reserves" ${pv.withReserves ? 'checked' : ''} style="width:auto;margin:0">
-        <span>Réception prononcée <strong>avec réserves</strong> (sinon : sans réserve)</span></label>
-      <label style="margin-top:12px">Liste des réserves (emplacement, objet, description)</label>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Les deux cases à cocher du PV sont toujours imprimées vides : c'est le client qui coche sur le chantier.</div>
+      <label>Liste des réserves (emplacement, objet, description)</label>
       <textarea id="pv-reserves" rows="4" placeholder="Laissez vide pour imprimer des lignes à remplir à la main sur le chantier.">${escapeHtml(pv.reserves||'')}</textarea>
       <label style="margin-top:12px">Date de levée des réserves (page 2, optionnel)</label>
       <input type="date" id="pv-levee" value="${pv.leveeDate||''}" style="max-width:220px">
@@ -2030,7 +2042,6 @@ function renderPvScreen(id) {
     place: $('#pv-place').value.trim(),
     quoteIds: [...document.querySelectorAll('[data-pv-q]')].filter(c => c.checked).map(c => c.dataset.pvQ),
     exclusions: $('#pv-exclusions').value.trim(),
-    withReserves: $('#pv-with-reserves').checked,
     reserves: $('#pv-reserves').value.trim(),
     leveeDate: $('#pv-levee').value
   });
