@@ -2323,19 +2323,24 @@ function wrapPrintSheets() {
    jamais au milieu d'un texte. Renvoie les bornes verticales des pages. */
 function decouperEnPages(pg, dispo) {
   const total = pg.scrollHeight;
-  if (total <= dispo + 6) return [0, total];   // tolérance : pas de page en plus pour quelques pixels
+  if (total <= dispo + 6) return [0, total];
   const base = pg.getBoundingClientRect().top;
-  const points = [];
-  pg.querySelectorAll('.bp-header, .bp-client, table.bp-lines tbody tr, .bp-block, .bp-net, .bp-bottom, .bp-signs')
-    .forEach(n => points.push(Math.round(n.getBoundingClientRect().bottom - base)));
-  points.push(total);
-  const uniques = Array.from(new Set(points)).filter(x => x > 0).sort((a, b) => a - b);
+  // blocs insécables : on ne coupe jamais à l'intérieur de l'un d'eux
+  const blocs = [];
+  pg.querySelectorAll('.bp-header, .bp-client, table.bp-lines tbody tr, .bp-bottom, .bp-signs').forEach(n => {
+    const r = n.getBoundingClientRect();
+    blocs.push({ haut: Math.round(r.top - base), bas: Math.round(r.bottom - base) });
+  });
+  const points = new Set([total]);
+  blocs.forEach(b => { points.add(b.haut); points.add(b.bas); });
+  const uniques = Array.from(points).filter(x => x > 0).sort((a, b) => a - b);
+  const dansUnBloc = (y) => blocs.some(b => y > b.haut + 1 && y < b.bas - 1);
   const bornes = [0];
   let courant = 0, garde = 0;
   while (courant < total - 1 && garde++ < 60) {
     const limite = courant + dispo;
     let suivant = 0;
-    for (const t of uniques) if (t > courant && t <= limite) suivant = t;
+    for (const t of uniques) if (t > courant && t <= limite && !dansUnBloc(t)) suivant = t;
     if (!suivant) suivant = Math.min(limite, total);
     bornes.push(suivant);
     courant = suivant;
