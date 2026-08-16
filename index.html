@@ -978,22 +978,6 @@ function openSheetsPreview(build, libelle, imprimer) {
       bg.querySelector('.preview-bar').appendChild(w);
     }
   }, 300);
-  // Alerte si une feuille déborde de l'A4 : ce qui dépasse partirait sur une page en plus
-  setTimeout(() => {
-    const probe = d.createElement('div');
-    probe.style.cssText = 'position:absolute;width:297mm;height:0;visibility:hidden';
-    d.body.appendChild(probe);
-    const a4 = probe.offsetWidth; probe.remove();
-    const trop = Array.from(d.querySelectorAll('.sheet'))
-      .map((sh, i) => ({ i: i + 1, delta: Math.round(sh.scrollHeight - a4) }))
-      .filter(x => x.delta > 2);
-    if (trop.length) {
-      const w = document.createElement('span');
-      w.style.cssText = 'color:#f59e0b;font-size:12px;font-weight:600';
-      w.textContent = '⚠ Page ' + trop.map(x => x.i).join(', ') + ' : le contenu dépasse la feuille et partira sur une page supplémentaire.';
-      bg.querySelector('.preview-bar').appendChild(w);
-    }
-  }, 300);
   bg.querySelector('[data-pv-print]').onclick = () => { bg.remove(); imprimer(); };
   return bg;
 }
