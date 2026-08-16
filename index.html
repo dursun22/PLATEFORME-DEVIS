@@ -1300,7 +1300,7 @@ function renderDocList(kind, mode) {
        </div>`
     : `<div class="topbar"><h1>${title}</h1><a class="btn btn-primary" href="#/${route}/new">+ ${kind==='quote'?'Nouveau devis':'Nouvelle facture'}</a></div>`;
   const emptyMsg = archive
-    ? `<div class="empty"><h3>Aucun ${kind==='quote'?'devis accepté':'facture payée'}</h3><p>${kind==='quote'?'Passez un devis au statut « Accepté » et il arrivera ici automatiquement.':'Passez une facture au statut « Payé » et elle arrivera ici automatiquement.'}</p></div>`
+    ? `<div class="empty"><h3>${kind==='quote'?'Aucun devis accepté':'Aucune facture payée'}</h3><p>${kind==='quote'?'Passez un devis au statut « Accepté » et il arrivera ici automatiquement.':'Passez une facture au statut « Payé » et elle arrivera ici automatiquement.'}</p></div>`
     : `<div class="empty"><h3>Aucun ${docLabel(kind)} en cours</h3><p>Créez-en un pour démarrer.</p></div>`;
   return head + `
     <div class="card">${items.length === 0 ? emptyMsg : `
