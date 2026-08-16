@@ -152,8 +152,16 @@
       font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif; font-size: 10pt;
       -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     .print-view * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .print-view * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     .app, .sync-status, .center-screen { display: none !important; }
-    @page { size: A4; margin: 14mm 15mm 16mm; }
+    /* Les marges sont portées par la feuille elle-même : rendu identique à l'aperçu */
+    @page { size: A4; margin: 0; }
+    .print-view .sheet { width: 210mm; min-height: 297mm; padding: 14mm 15mm 16mm; box-sizing: border-box;
+      position: relative; background: #fff; page-break-after: always; break-after: page; }
+    .print-view .sheet:last-child { page-break-after: auto; break-after: auto; }
+    /* les sauts de page logiques sont désormais portés par les feuilles */
+    .print-view .print-cgv, .print-view .pv-page2, .print-view .pv-break { page-break-before: auto !important; break-before: auto !important; }
   }
   /* Reset des styles globaux de l'app qui fuient dans le PDF ET dans l'aperçu */
   .print-view table { width: auto; }
@@ -931,20 +939,10 @@ function pdfStylesheet() {
   return (a >= 0 && b > a) ? all.slice(a, b) : '';
 }
 
-function showPreview(doc, kind) {
-  renderPrintView(doc, kind);
-  const src = document.getElementById('print');
-  const page1 = src.querySelector('.bp-page1');
-  const cgv = src.querySelector('.print-cgv');
-  const pvSheets = [...src.querySelectorAll('.pv-sheet')];
-
-  const clean = (node) => {
-    if (!node) return '';
-    const tmp = node.cloneNode(true);
-    tmp.querySelectorAll('.bp-footer-dyn').forEach(n => n.remove());
-    return tmp.innerHTML;
-  };
-
+/* Aperçu générique : affiche exactement les feuilles qui seront imprimées */
+function openSheetsPreview(build, libelle, imprimer) {
+  build();
+  const sheets = Array.from(document.getElementById('print').querySelectorAll('.sheet'));
   document.querySelectorAll('.preview-bg').forEach(n => n.remove());
   const bg = document.createElement('div');
   bg.className = 'preview-bg';
@@ -952,38 +950,33 @@ function showPreview(doc, kind) {
     <div class="preview-bar">
       <button class="btn btn-primary" data-pv-print>⎙ Imprimer / PDF</button>
       <button class="btn" data-pv-close>✕ Fermer</button>
-      <span style="color:#a1a1aa;font-size:12px">Rendu identique au document imprimé</span>
+      <span style="color:#a1a1aa;font-size:12px">${escapeHtml(libelle)}</span>
     </div>
     <iframe class="preview-frame" title="Aperçu"></iframe>`;
   document.body.appendChild(bg);
-
-  const legal = [db.company.legalForm, db.company.name].filter(Boolean).join(' ')
-    + (db.company.siret ? ' — SIRET ' + db.company.siret : '');
-  const nbPages = 1 + (cgv ? 1 : 0) + pvSheets.length;
-  const footer = (i) => `<div class="bp-footer" style="position:absolute;left:15mm;right:15mm;bottom:8mm">
-      <span>${escapeHtml(legal)}</span><span>Page ${i}/${nbPages}</span></div>`;
-
-  const frame = bg.querySelector('.preview-frame');
-  const d = frame.contentDocument;
+  const d = bg.querySelector('.preview-frame').contentDocument;
   d.open();
   d.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     html,body{margin:0;padding:0;background:#4a4a52;}
-    .sheet{position:relative;width:210mm;min-height:297mm;padding:14mm 15mm 16mm;box-sizing:border-box;
+    .sheet{width:210mm;min-height:297mm;padding:14mm 15mm 16mm;box-sizing:border-box;position:relative;
       background:#fff;color:#111;margin:0 auto 20px;box-shadow:0 12px 40px rgba(0,0,0,.5);
       font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;font-size:10pt;}
     .sheet table{border-collapse:collapse;}
-    .print-cgv{page-break-before:auto;}
-    .pv-page2,.pv-break{page-break-before:auto;}
+    .print-cgv,.pv-page2,.pv-break{page-break-before:auto;}
     ${pdfStylesheet()}
-  </style></head><body>
-    <div class="sheet">${clean(page1)}${footer(1)}</div>
-    ${cgv ? `<div class="sheet"><div class="print-cgv">${clean(cgv)}</div>${footer(2)}</div>` : ''}
-    ${pvSheets.map((pg, i) => `<div class="sheet">${clean(pg)}${footer(i + 2 + (cgv ? 1 : 0))}</div>`).join('')}
-  </body></html>`);
+  </style></head><body>${sheets.map(x => x.outerHTML).join('')}</body></html>`);
   d.close();
+  bg.querySelector('[data-pv-print]').onclick = () => { bg.remove(); imprimer(); };
+  return bg;
+}
 
+function showPreview(doc, kind) {
+  const bg = openSheetsPreview(
+    () => renderPrintView(doc, kind),
+    'Rendu identique au document imprimé',
+    () => { renderPrintView(doc, kind); window.print(); }
+  );
   bg.querySelector('[data-pv-close]').onclick = () => bg.remove();
-  bg.querySelector('[data-pv-print]').onclick = () => { bg.remove(); renderPrintView(doc, kind); window.print(); };
   bg.onclick = (e) => { if (e.target === bg) bg.remove(); };
   document.addEventListener('keydown', function esc(ev) {
     if (ev.key === 'Escape') { bg.remove(); document.removeEventListener('keydown', esc); }
@@ -1987,7 +1980,7 @@ function pvOwnerDefaults(client) {
   return { name: person || clientName(client), quality: '' };
 }
 
-function renderPvPrint(doc, part) { $('#print').innerHTML = pvPagesHtml(doc, true, part); }
+function renderPvPrint(doc, part) { $('#print').innerHTML = pvPagesHtml(doc, true, part); wrapPrintSheets(); }
 
 function pvPagesHtml(doc, standalone, part) {
   part = part || 'reception';
@@ -2118,41 +2111,12 @@ function pvPagesHtml(doc, standalone, part) {
 }
 
 function showPvPreview(doc, part) {
-  renderPvPrint(doc, part);
-  const src = document.getElementById('print');
-  const pages = [...src.querySelectorAll('.pv-sheet')];
-  document.querySelectorAll('.preview-bg').forEach(n => n.remove());
-  const bg = document.createElement('div');
-  bg.className = 'preview-bg';
-  bg.innerHTML = `
-    <div class="preview-bar">
-      <button class="btn btn-primary" data-pv-print>⎙ Imprimer / PDF</button>
-      <button class="btn" data-pv-close>✕ Fermer</button>
-      <span style="color:#a1a1aa;font-size:12px">${part === 'levee' ? 'Procès-verbal de levée des réserves' : 'Procès-verbal de réception'}</span>
-    </div>
-    <iframe class="preview-frame" title="Aperçu PV"></iframe>`;
-  document.body.appendChild(bg);
-  const legal = [db.company.legalForm, db.company.name].filter(Boolean).join(' ')
-    + (db.company.siret ? ' — SIRET ' + db.company.siret : '');
-  const frame = bg.querySelector('.preview-frame');
-  const d = frame.contentDocument;
-  d.open();
-  d.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-    html,body{margin:0;padding:0;background:#4a4a52;}
-    .sheet{position:relative;width:210mm;min-height:297mm;padding:14mm 15mm 16mm;box-sizing:border-box;
-      background:#fff;color:#111;margin:0 auto 20px;box-shadow:0 12px 40px rgba(0,0,0,.5);
-      font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;font-size:10pt;}
-    .sheet table{border-collapse:collapse;}
-    .pv-page2{page-break-before:auto;}
-    ${pdfStylesheet()}
-  </style></head><body>
-    ${pages.map((pg,i) => `<div class="sheet">${pg.innerHTML}
-      <div class="bp-footer" style="position:absolute;left:15mm;right:15mm;bottom:8mm">
-        <span>${escapeHtml(legal)}</span><span>Page ${i+1}/${pages.length}</span></div></div>`).join('')}
-  </body></html>`);
-  d.close();
+  const bg = openSheetsPreview(
+    () => renderPvPrint(doc, part),
+    part === 'levee' ? 'Procès-verbal de levée des réserves' : 'Procès-verbal de réception',
+    () => { renderPvPrint(doc, part); window.print(); }
+  );
   bg.querySelector('[data-pv-close]').onclick = () => bg.remove();
-  bg.querySelector('[data-pv-print]').onclick = () => { bg.remove(); renderPvPrint(doc, part); window.print(); };
   bg.onclick = (e) => { if (e.target === bg) bg.remove(); };
 }
 
@@ -2262,57 +2226,29 @@ function renderPvScreen(id) {
   $('#pv-preview-levee').onclick = () => showPvPreview({ ...doc, pv: collect() }, 'levee');
 }
 
-function paginatePrintView() {
+function paginatePrintView() { wrapPrintSheets(); }
+
+/* Enveloppe chaque page logique dans une feuille A4 : structure commune à l'aperçu et à l'impression */
+function wrapPrintSheets() {
   const el = document.getElementById('print');
   if (!el) return;
   const co = db.company || {};
-  el.querySelectorAll('.bp-footer-dyn').forEach(n => n.remove());
-
-  const page1 = el.querySelector('.bp-page1');
-  const cgv = el.querySelector('.print-cgv');
-  if (page1) page1.style.minHeight = '';
-  if (cgv) cgv.style.minHeight = '';
-
-  // Mesure px/mm
-  const probe = document.createElement('div');
-  probe.style.cssText = 'position:absolute;left:-9999px;top:0;width:100mm;height:0;visibility:hidden';
-  document.body.appendChild(probe);
-  const pxPerMm = probe.offsetWidth / 100 || 3.7795;
-  probe.remove();
-
-  const pageH = 267 * pxPerMm;   // zone imprimable A4 (297 - 14 - 16)
-  const contentW = 180 * pxPerMm; // largeur utile (210 - 15 - 15)
-
-  // Layout temporaire hors écran à la largeur A4 pour mesurer
-  const saved = el.getAttribute('style') || '';
-  el.setAttribute('style', 'display:block;position:absolute;left:-10000px;top:0;width:' + contentW + 'px;background:#fff;visibility:hidden;');
-
-  const devisH = cgv ? cgv.offsetTop : el.scrollHeight;
-  const pagesDevis = Math.max(1, Math.ceil((devisH - 2) / pageH));
-  if (page1) page1.style.minHeight = (pagesDevis * pageH) + 'px';
-
-  let pagesCgv = 0;
-  if (cgv) {
-    const cgvH = cgv.scrollHeight;
-    pagesCgv = Math.max(1, Math.ceil((cgvH - 2) / pageH));
-    cgv.style.minHeight = (pagesCgv * pageH) + 'px';
-  }
-
-  const total = pagesDevis + pagesCgv;
   const legal = [co.legalForm, co.name].filter(Boolean).join(' ') + (co.siret ? ' — SIRET ' + co.siret : '');
-
-  for (let i = 0; i < total; i++) {
+  const pages = Array.from(el.children).filter(n => n.classList &&
+    (n.classList.contains('bp-page1') || n.classList.contains('print-cgv') || n.classList.contains('pv-sheet')));
+  if (!pages.length) return;
+  const total = pages.length;
+  const frag = document.createDocumentFragment();
+  pages.forEach((pg, i) => {
+    pg.style.minHeight = '';
+    const sheet = document.createElement('div');
+    sheet.className = 'sheet';
+    sheet.appendChild(pg);
     const f = document.createElement('div');
-    f.className = 'bp-footer bp-footer-dyn';
-    f.style.top = ((i + 1) * pageH - 9 * pxPerMm) + 'px';
+    f.className = 'bp-footer';
+    f.style.cssText = 'position:absolute;left:15mm;right:15mm;bottom:8mm';
     f.innerHTML = '<span>' + escapeHtml(legal) + '</span><span>Page ' + (i + 1) + '/' + total + '</span>';
-    el.appendChild(f);
-  }
-
-  el.setAttribute('style', saved);
-}
-
-
+    sheet.appendChild(f);
 
 function defaultCgvTemplate() {
   const co = db.company || {};
