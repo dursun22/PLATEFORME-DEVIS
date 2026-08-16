@@ -1721,7 +1721,7 @@ function renderPrintView(doc, kind) {
       </div>
       <div class="bp-sign-box">
         <div class="bp-sign-title">Le client — bon pour accord</div>
-        <div class="bp-sign-who">${escapeHtml(recipientName)}</div>
+        <div class="bp-sign-who">${escapeHtml(clientName(client))}</div>
         <div>Mention manuscrite « Reçu avant l'exécution des travaux, bon pour accord », date et signature</div>
         ${doc.signature
           ? `<div class="bp-sign-done">✓ Signé électroniquement par ${escapeHtml(doc.signature.signedBy)} le ${fmtDate(doc.signature.signedAt)}</div>`
