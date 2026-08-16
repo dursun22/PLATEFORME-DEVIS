@@ -242,8 +242,8 @@
   /* CGV page 2 */
   .print-cgv { page-break-before: always; background: #fff; position: relative; box-sizing: border-box; }
   .print-cgv h2 { font-size: 11pt; font-weight: 700; margin: 0 0 8pt; color: #111; text-align: center; text-transform: uppercase; letter-spacing: .03em; }
-  .print-cgv-body { font-size: 6.8pt; line-height: 1.35; color: #333; text-align: justify; column-count: 2; column-gap: 14pt; column-rule: 1px solid #e6e6e6; }
-  .print-cgv-body strong { color: #111; font-weight: 700; display: inline-block; margin-top: 3pt; }
+  .print-cgv-body { font-size: 6.8pt; line-height: 1.28; color: #333; text-align: justify; column-count: 2; column-gap: 14pt; column-rule: 1px solid #e6e6e6; }
+  .print-cgv-body strong { color: #111; font-weight: 700; display: inline-block; margin-top: 4pt; }
 
   /*PDF-CSS-END*/
   .dash-grid { grid-template-columns: 2fr 1fr; }
@@ -1790,6 +1790,7 @@ function renderQuoteView(id, kind) {
 function formatCgvBody(text) {
   let s = escapeHtml(text);
   s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\n{2,}/g, '\n');   // pas de ligne vide : l'espace vient du style des titres
   s = s.replace(/\n/g, '<br>');
   return s;
 }
