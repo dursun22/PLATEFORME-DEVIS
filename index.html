@@ -370,6 +370,7 @@ service cloud.firestore {
       <a data-route="dashboard"><span>📊</span> Tableau de bord</a>
       <a data-route="devis"><span>📄</span> Devis</a>
       <a data-route="devis-acceptes"><span>✅</span> Devis acceptés</a>
+      <a data-route="pv"><span>📋</span> PV de réception</a>
       <a data-route="factures"><span>🧾</span> Factures</a>
       <a data-route="factures-payees"><span>💰</span> Factures payées</a>
       <a data-route="clients"><span>👥</span> Clients</a>
@@ -1016,6 +1017,8 @@ function render() {
       main.innerHTML = renderDocList('quote'); bindDocList('quote'); break;
     case 'devis-acceptes':
       main.innerHTML = renderDocList('quote', 'archive'); bindDocList('quote'); break;
+    case 'pv':
+      main.innerHTML = renderPvList(); break;
     case 'factures':
       if (action === 'new') return renderQuoteEditor(null, 'invoice');
       if (action === 'edit' && id) return renderQuoteEditor(id, 'invoice');
@@ -1997,6 +2000,49 @@ function showPvPreview(doc, part) {
   bg.onclick = (e) => { if (e.target === bg) bg.remove(); };
 }
 
+/* ===== Liste des procès-verbaux enregistrés ===== */
+function pvDocs() {
+  return db.quotes.filter(q => q.pv && q.pv.effectDate)
+    .sort((a,b) => (b.pv.effectDate||'').localeCompare(a.pv.effectDate||''));
+}
+
+function renderPvList() {
+  const items = pvDocs();
+  const avecReserves = items.filter(q => (q.pv.reserves||'').trim());
+  const levees = avecReserves.filter(q => q.pv.leveeDate);
+  const stat = (lbl, val, color) => `<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">${lbl}</div>
+    <div style="font-size:22px;font-weight:700${color ? ';color:'+color : ''}">${val}</div></div>`;
+
+  return `<div class="topbar"><h1>📋 PV de réception</h1></div>
+    <div class="card" style="margin-bottom:16px;display:flex;gap:32px;flex-wrap:wrap;align-items:center">
+      ${stat('Procès-verbaux', items.length, 'var(--accent)')}
+      ${stat('Avec réserves', avecReserves.length, avecReserves.length > levees.length ? 'var(--warning)' : '')}
+      ${stat('Réserves levées', levees.length + ' / ' + avecReserves.length, '')}
+    </div>
+    <div class="card">${items.length === 0
+      ? `<div class="empty"><h3>Aucun procès-verbal</h3><p>Ouvrez un devis, cliquez sur « 📋 PV de réception », renseignez-le puis enregistrez : il apparaîtra ici.</p></div>`
+      : `<table><thead><tr><th>Date d'effet</th><th>Client</th><th>Chantier</th><th>Devis</th><th>Réserves</th><th></th></tr></thead><tbody>
+      ${items.map(q => {
+        const c = clientById(q.clientId);
+        const nb = (q.pv.quoteIds||[]).length;
+        const res = (q.pv.reserves||'').trim();
+        const badge = !res
+          ? `<span class="badge badge-accepted">Sans réserve</span>`
+          : (q.pv.leveeDate
+              ? `<span class="badge badge-paid">Levées le ${fmtDate(q.pv.leveeDate)}</span>`
+              : `<span class="badge badge-overdue">À lever</span>`);
+        return `<tr class="clickable" onclick="navigate('devis/pv/${q.id}')">
+          <td><strong>${fmtDate(q.pv.effectDate)}</strong></td>
+          <td>${escapeHtml(q.pv.ownerName || clientName(c))}</td>
+          <td>${escapeHtml((c && c.city) || '—')}</td>
+          <td>${nb} devis${nb > 1 ? '' : ''} · ${escapeHtml(q.number||'')}</td>
+          <td>${badge}</td>
+          <td style="text-align:right" onclick="event.stopPropagation()">
+            <a class="btn btn-sm" href="#/devis/pv/${q.id}">Ouvrir</a>
+            <a class="btn btn-sm" href="#/devis/view/${q.id}">Devis</a></td></tr>`;
+      }).join('')}</tbody></table>`}</div>`;
+}
+
 function renderPvScreen(id) {
   const doc = db.quotes.find(q => q.id === id);
   if (!doc) { $('#main').innerHTML = `<div class="card empty"><h3>Devis introuvable</h3></div>`; return; }
@@ -2006,7 +2052,7 @@ function renderPvScreen(id) {
     .sort((a,b) => (a.date||'').localeCompare(b.date||''));
 
   $('#main').innerHTML = `<div class="topbar"><h1>📋 PV de réception — ${escapeHtml(doc.number||'')}</h1>
-    <div class="actions"><a class="btn" href="#/devis/view/${doc.id}">← Retour</a>
+    <div class="actions"><a class="btn" href="#/pv">← Tous les PV</a><a class="btn" href="#/devis/view/${doc.id}">Le devis</a>
       <button class="btn" id="pv-save">Enregistrer</button>
       <button class="btn btn-primary" id="pv-preview">👁️ PV de réception</button>
       <button class="btn" id="pv-preview-levee">📄 Levée des réserves</button></div></div>
