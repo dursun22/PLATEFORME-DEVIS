@@ -2277,7 +2277,7 @@ function wrapPrintSheets() {
       const bornes = decouperEnPages(pg, dispo);
       if (bornes.length <= 2) { unites.push({ node: pg, ajuster: false }); return; }
       for (let k = 0; k < bornes.length - 1; k++) {
-        unites.push({ node: k === 0 ? pg : pg.cloneNode(true), debut: bornes[k], hauteur: dispo });
+        unites.push({ node: k === 0 ? pg : pg.cloneNode(true), debut: bornes[k], hauteur: bornes[k + 1] - bornes[k] });
       }
     } else {
       unites.push({ node: pg, ajuster: true });
