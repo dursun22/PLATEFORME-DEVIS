@@ -2249,16 +2249,60 @@ function wrapPrintSheets() {
   const pages = Array.from(el.children).filter(n => n.classList &&
     (n.classList.contains('bp-page1') || n.classList.contains('print-cgv') || n.classList.contains('pv-sheet')));
   if (!pages.length) return;
-  const total = pages.length;
+
+  const saved = el.getAttribute('style') || '';
+  let dispo = 0;
+  try {
+    if (typeof getComputedStyle === 'function') {
+      const m1 = document.createElement('div');
+      m1.style.cssText = 'position:absolute;visibility:hidden;width:10mm;height:297mm';
+      const m2 = document.createElement('div');
+      m2.style.cssText = 'position:absolute;visibility:hidden;width:10mm;height:30mm';
+      document.body.appendChild(m1); document.body.appendChild(m2);
+      dispo = m1.offsetHeight - m2.offsetHeight;   // A4 moins marges haute et basse
+      m1.remove(); m2.remove();
+      // mise en page hors écran à la largeur utile réelle d'une feuille
+      el.setAttribute('style', 'display:block;position:absolute;left:-10000px;top:0;width:180mm;visibility:hidden;background:#fff');
+    }
+  } catch (e) { dispo = 0; }
+  /* Le devis se poursuit sur autant de pages que nécessaire ;
+     les CGV et le PV restent sur une seule page (réduits si besoin). */
+  const unites = [];
+  pages.forEach(pg => {
+    const enFlux = pg.classList.contains('bp-page1');
+    if (enFlux && dispo > 0) {
+      const bornes = decouperEnPages(pg, dispo);
+      if (bornes.length <= 2) { unites.push({ node: pg, ajuster: false }); return; }
+      for (let k = 0; k < bornes.length - 1; k++) {
+        unites.push({ node: k === 0 ? pg : pg.cloneNode(true), debut: bornes[k], hauteur: dispo });
+      }
+    } else {
+      unites.push({ node: pg, ajuster: true });
+    }
+  });
+
+  const total = unites.length;
   const frag = document.createDocumentFragment();
-  pages.forEach((pg, i) => {
-    pg.style.minHeight = '';
+  unites.forEach((u, i) => {
+    u.node.style.minHeight = '';
     const sheet = document.createElement('div');
     sheet.className = 'sheet';
-    const fit = document.createElement('div');
-    fit.className = 'sheet-fit';
-    fit.appendChild(pg);
-    sheet.appendChild(fit);
+    if (u.debut !== undefined) {
+      const win = document.createElement('div');
+      win.className = 'sheet-window';
+      win.style.cssText = 'height:' + u.hauteur + 'px;overflow:hidden;position:relative';
+      const flux = document.createElement('div');
+      flux.className = 'sheet-flow';
+      flux.style.marginTop = (-u.debut) + 'px';
+      flux.appendChild(u.node);
+      win.appendChild(flux);
+      sheet.appendChild(win);
+    } else {
+      const fit = document.createElement('div');
+      fit.className = 'sheet-fit';
+      fit.appendChild(u.node);
+      sheet.appendChild(fit);
+    }
     const f = document.createElement('div');
     f.className = 'bp-footer';
     f.style.cssText = 'position:absolute;left:15mm;right:15mm;bottom:8mm';
@@ -2268,7 +2312,32 @@ function wrapPrintSheets() {
   });
   el.innerHTML = '';
   el.appendChild(frag);
+  el.setAttribute('style', saved);
   fitSheetsToPage(el);
+}
+
+/* Détermine où couper le devis : au ras d'un bloc ou d'une ligne du tableau,
+   jamais au milieu d'un texte. Renvoie les bornes verticales des pages. */
+function decouperEnPages(pg, dispo) {
+  const total = pg.scrollHeight;
+  if (total <= dispo + 1) return [0, total];
+  const base = pg.getBoundingClientRect().top;
+  const points = [];
+  pg.querySelectorAll('.bp-header, .bp-client, table.bp-lines tbody tr, .bp-block, .bp-net, .bp-bottom, .bp-signs')
+    .forEach(n => points.push(Math.round(n.getBoundingClientRect().bottom - base)));
+  points.push(total);
+  const uniques = Array.from(new Set(points)).filter(x => x > 0).sort((a, b) => a - b);
+  const bornes = [0];
+  let courant = 0, garde = 0;
+  while (courant < total - 1 && garde++ < 60) {
+    const limite = courant + dispo;
+    let suivant = 0;
+    for (const t of uniques) if (t > courant && t <= limite) suivant = t;
+    if (!suivant) suivant = Math.min(limite, total);
+    bornes.push(suivant);
+    courant = suivant;
+  }
+  return bornes;
 }
 
 /* Réduit le contenu d'une feuille s'il dépasse l'A4, pour qu'une page logique
