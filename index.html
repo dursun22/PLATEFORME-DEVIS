@@ -2274,6 +2274,10 @@ function wrapPrintSheets() {
   pages.forEach(pg => {
     const enFlux = pg.classList.contains('bp-page1');
     if (enFlux && dispo > 0) {
+      const hauteur = pg.scrollHeight;
+      // Dépassement léger (moins de 20 %) : on comprime pour rester sur une page,
+      // plutôt que d'envoyer les signatures seules sur une page presque vide.
+      if (hauteur > dispo + 6 && hauteur <= dispo * 1.20) { unites.push({ node: pg, ajuster: true }); return; }
       const bornes = decouperEnPages(pg, dispo);
       if (bornes.length <= 2) { unites.push({ node: pg, ajuster: false }); return; }
       for (let k = 0; k < bornes.length - 1; k++) {
