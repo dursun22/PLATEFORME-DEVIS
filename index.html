@@ -162,6 +162,9 @@
     .print-view .print-cgv, .print-view .pv-page2, .print-view .pv-break { page-break-before: auto !important; break-before: auto !important; }
   }
   /* Reset des styles globaux de l'app qui fuient dans le PDF ET dans l'aperçu */
+  /* Typographie de référence : la mesure des pages doit donner le même résultat qu'à l'impression */
+  .print-view { font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    font-size: 10pt; line-height: normal; color: #111; }
   .print-view table { width: auto; }
   .print-view td, .print-view th { border: none; padding: 0; text-transform: none; letter-spacing: normal; color: inherit; font-size: inherit; font-weight: inherit; text-align: left; background: transparent; }
   .print-view table.bp-lines, .print-view table.bp-client, .print-view table.bp-totals { width: 100%; }
@@ -2320,7 +2323,7 @@ function wrapPrintSheets() {
    jamais au milieu d'un texte. Renvoie les bornes verticales des pages. */
 function decouperEnPages(pg, dispo) {
   const total = pg.scrollHeight;
-  if (total <= dispo + 1) return [0, total];
+  if (total <= dispo + 6) return [0, total];   // tolérance : pas de page en plus pour quelques pixels
   const base = pg.getBoundingClientRect().top;
   const points = [];
   pg.querySelectorAll('.bp-header, .bp-client, table.bp-lines tbody tr, .bp-block, .bp-net, .bp-bottom, .bp-signs')
