@@ -2249,6 +2249,11 @@ function wrapPrintSheets() {
     f.style.cssText = 'position:absolute;left:15mm;right:15mm;bottom:8mm';
     f.innerHTML = '<span>' + escapeHtml(legal) + '</span><span>Page ' + (i + 1) + '/' + total + '</span>';
     sheet.appendChild(f);
+    frag.appendChild(sheet);
+  });
+  el.innerHTML = '';
+  el.appendChild(frag);
+}
 
 function defaultCgvTemplate() {
   const co = db.company || {};
