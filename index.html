@@ -155,7 +155,7 @@
     .app, .sync-status, .center-screen { display: none !important; }
     /* Les marges sont portées par la feuille elle-même : rendu identique à l'aperçu */
     @page { size: A4; margin: 0; }
-    .print-view .sheet { width: 210mm; min-height: 297mm; padding: 14mm 15mm 16mm; box-sizing: border-box;
+    .print-view .sheet { width: 210mm; height: 297mm; overflow: hidden; padding: 14mm 15mm 16mm; box-sizing: border-box;
       position: relative; background: #fff; page-break-after: always; break-after: page; }
     .print-view .sheet:last-child { page-break-after: auto; break-after: auto; }
     /* les sauts de page logiques sont désormais portés par les feuilles */
@@ -956,7 +956,7 @@ function openSheetsPreview(build, libelle, imprimer) {
   d.open();
   d.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     html,body{margin:0;padding:0;background:#4a4a52;}
-    .sheet{width:210mm;min-height:297mm;padding:14mm 15mm 16mm;box-sizing:border-box;position:relative;
+    .sheet{width:210mm;height:297mm;overflow:hidden;padding:14mm 15mm 16mm;box-sizing:border-box;position:relative;
       background:#fff;color:#111;margin:0 auto 20px;box-shadow:0 12px 40px rgba(0,0,0,.5);
       font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;font-size:10pt;}
     .sheet table{border-collapse:collapse;}
@@ -964,6 +964,20 @@ function openSheetsPreview(build, libelle, imprimer) {
     ${pdfStylesheet()}
   </style></head><body>${sheets.map(x => x.outerHTML).join('')}</body></html>`);
   d.close();
+  // Information : signale les pages dont le contenu a dû être réduit pour tenir
+  setTimeout(() => {
+    const reduites = Array.from(d.querySelectorAll('.sheet'))
+      .map((sh, i) => ({ i: i + 1, f: sh.querySelector('.sheet-fit') }))
+      .map(x => ({ i: x.i, pct: x.f ? x.f.getAttribute('data-reduit') : null }))
+      .filter(x => x.pct);
+    if (reduites.length) {
+      const w = document.createElement('span');
+      w.style.cssText = 'color:#f59e0b;font-size:12px;font-weight:600';
+      w.textContent = '\u26a0 Page ' + reduites.map(x => x.i + ' (' + x.pct + ' %)').join(', ')
+        + ' \u2014 contenu réduit pour tenir sur une seule page.';
+      bg.querySelector('.preview-bar').appendChild(w);
+    }
+  }, 300);
   // Alerte si une feuille déborde de l'A4 : ce qui dépasse partirait sur une page en plus
   setTimeout(() => {
     const probe = d.createElement('div');
@@ -2257,7 +2271,10 @@ function wrapPrintSheets() {
     pg.style.minHeight = '';
     const sheet = document.createElement('div');
     sheet.className = 'sheet';
-    sheet.appendChild(pg);
+    const fit = document.createElement('div');
+    fit.className = 'sheet-fit';
+    fit.appendChild(pg);
+    sheet.appendChild(fit);
     const f = document.createElement('div');
     f.className = 'bp-footer';
     f.style.cssText = 'position:absolute;left:15mm;right:15mm;bottom:8mm';
@@ -2267,6 +2284,39 @@ function wrapPrintSheets() {
   });
   el.innerHTML = '';
   el.appendChild(frag);
+  fitSheetsToPage(el);
+}
+
+/* Réduit le contenu d'une feuille s'il dépasse l'A4, pour qu'une page logique
+   reste toujours une seule page papier (CGV jamais coupées, numéros justes). */
+function fitSheetsToPage(el) {
+  if (typeof getComputedStyle !== 'function') return;
+  try { fitSheetsToPageImpl(el); } catch (e) { console.warn('Ajustement des pages ignoré :', e); }
+}
+function fitSheetsToPageImpl(el) {
+  const saved = el.getAttribute('style') || '';
+  el.setAttribute('style', 'display:block;position:absolute;left:-10000px;top:0;width:210mm;visibility:hidden;background:#fff');
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:absolute;width:297mm;height:0;visibility:hidden';
+  document.body.appendChild(probe);
+  const a4 = probe.offsetWidth;
+  probe.remove();
+  el.querySelectorAll('.sheet').forEach(sh => {
+    const fit = sh.querySelector('.sheet-fit');
+    if (!fit) return;
+    fit.style.transform = ''; fit.style.width = ''; fit.removeAttribute('data-reduit');
+    const cs = getComputedStyle(sh);
+    const dispo = a4 - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const besoin = fit.scrollHeight;
+    if (besoin > dispo + 1) {
+      const k = Math.max(0.55, dispo / besoin);
+      fit.style.transformOrigin = 'top left';
+      fit.style.transform = 'scale(' + k.toFixed(4) + ')';
+      fit.style.width = (100 / k).toFixed(2) + '%';
+      fit.setAttribute('data-reduit', Math.round(k * 100));
+    }
+  });
+  el.setAttribute('style', saved);
 }
 
 function defaultCgvTemplate() {
