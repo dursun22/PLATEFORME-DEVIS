@@ -2547,21 +2547,16 @@ function wrapPrintSheets() {
 
 /* Détermine où couper le devis : au ras d'un bloc ou d'une ligne du tableau,
    jamais au milieu d'un texte. Renvoie les bornes verticales des pages. */
-function decouperEnPages(pg, dispo) {
-  // +2 px : la fenêtre doit englober la bordure basse du dernier bloc, jamais la raser
-  const total = pg.scrollHeight + 2;
-  if (total <= dispo + 6) return [0, total];
-  const base = pg.getBoundingClientRect().top;
-  // blocs insécables : on ne coupe jamais à l'intérieur de l'un d'eux
-  const blocs = [];
-  pg.querySelectorAll('.bp-header, .bp-client, table.bp-lines tbody tr, .bp-bottom, .bp-signs').forEach(n => {
-    const r = n.getBoundingClientRect();
-    blocs.push({ haut: Math.floor(r.top - base), bas: Math.ceil(r.bottom - base) + 1 });
-  });
+/* Choisit les coupures. Séparé de la mesure pour être testable :
+   les bornes retenues sont toujours des frontières de blocs, jamais l'intérieur d'un bloc.
+   Les blocs voisins se touchent au pixel près, d'où la tolérance de 2 px : sans elle,
+   la frontière entre deux lignes serait considérée comme « dans » la ligne suivante
+   et toutes les coupures seraient refusées. */
+function choisirBornes(blocs, total, dispo) {
   const points = new Set([total]);
   blocs.forEach(b => { points.add(b.haut); points.add(b.bas); });
   const uniques = Array.from(points).filter(x => x > 0).sort((a, b) => a - b);
-  const dansUnBloc = (y) => blocs.some(b => y > b.haut + 1 && y < b.bas - 1);
+  const dansUnBloc = (y) => blocs.some(b => y > b.haut + 2 && y < b.bas - 2);
   const bornes = [0];
   let courant = 0, garde = 0;
   while (courant < total - 1 && garde++ < 60) {
@@ -2573,6 +2568,20 @@ function decouperEnPages(pg, dispo) {
     courant = suivant;
   }
   return bornes;
+}
+
+function decouperEnPages(pg, dispo) {
+  // +2 px : la fenêtre doit englober la bordure basse du dernier bloc, jamais la raser
+  const total = pg.scrollHeight + 2;
+  if (total <= dispo + 6) return [0, total];
+  const base = pg.getBoundingClientRect().top;
+  // blocs insécables : on ne coupe jamais à l'intérieur de l'un d'eux
+  const blocs = [];
+  pg.querySelectorAll('.bp-header, .bp-client, table.bp-lines tbody tr, .bp-bottom, .bp-signs').forEach(n => {
+    const r = n.getBoundingClientRect();
+    blocs.push({ haut: Math.round(r.top - base), bas: Math.round(r.bottom - base) });
+  });
+  return choisirBornes(blocs, total, dispo);
 }
 
 /* Réduit le contenu d'une feuille s'il dépasse l'A4, pour qu'une page logique
