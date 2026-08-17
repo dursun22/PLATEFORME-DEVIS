@@ -986,7 +986,7 @@ async function createStageInvoice(quote, stage) {
   const e = echeancesDevis(quote).find(x => x.stage === stage);
   if (!e || e.montant <= 0.005) return null;
   const prefix = db.company.invoicePrefix || 'FAC';
-  const num = db.company.nextInvoiceNum || 1;
+  const num = prochainNumero('invoice');
   const suffixe = { deposit: 'ACOMPTE', progress: 'MI-CHANTIER', balance: 'SOLDE', full: '' }[stage];
   const invoice = {
     id: uid(),
@@ -1617,11 +1617,27 @@ function docCosting(doc) {
   return { mat, sale, margin: sale - mat, pct: sale > 0 ? Math.round(100*(sale-mat)/sale) : 0 };
 }
 
+/* Le prochain numéro suit toujours le plus grand numéro déjà utilisé cette année :
+   le compteur des réglages ne peut plus faire repartir la numérotation en arrière. */
+function prochainNumero(kind) {
+  const isQuote = kind === 'quote';
+  const prefix = (isQuote ? db.company.quotePrefix : db.company.invoicePrefix) || (isQuote ? 'DEV' : 'FAC');
+  const debut = `${prefix}-${new Date().getFullYear()}-`;
+  let plusHaut = 0;
+  (docCollection(kind) || []).forEach(d => {
+    const n = String(d && d.number || '');
+    if (n.indexOf(debut) !== 0) return;
+    const v = parseInt(n.slice(debut.length), 10);
+    if (isFinite(v) && v > plusHaut) plusHaut = v;
+  });
+  const compteur = Number(db.company[isQuote ? 'nextQuoteNum' : 'nextInvoiceNum']) || 1;
+  return Math.max(compteur, plusHaut + 1);
+}
+
 function newDoc(kind) {
   const isQuote = kind === 'quote';
-  const numField = isQuote ? 'nextQuoteNum' : 'nextInvoiceNum';
   const prefix = isQuote ? db.company.quotePrefix : db.company.invoicePrefix;
-  const number = `${prefix}-${new Date().getFullYear()}-${String(db.company[numField]||1).padStart(3,'0')}`;
+  const number = `${prefix}-${new Date().getFullYear()}-${String(prochainNumero(kind)).padStart(3,'0')}`;
   return { id: uid(), number, date: today(), validityDays: isQuote ? 30 : null,
     dueDate: isQuote ? null : addDays(today(), 30), clientId: '', object: '',
     lines: [ newLine() ], deposit: isQuote ? 0 : null,
@@ -1829,7 +1845,14 @@ function renderQuoteEditor(id, kind) {
       if (!doc.lines.length || !doc.lines.some(l => Number(l.unitPrice) > 0 || l.description.trim())) { alert('Ajoutez au moins une ligne.'); return; }
       const statutAvant = editing ? editing.status : null;
       await saveDoc(doc, kind);
-      if (!editing) { db.company[isQuote ? 'nextQuoteNum' : 'nextInvoiceNum'] = (Number(db.company[isQuote ? 'nextQuoteNum' : 'nextInvoiceNum'])||1) + 1; await saveCompany(); }
+      if (!editing) {
+        // le compteur repart du numéro qui vient d'être attribué, sans attendre la synchro
+        const m = String(doc.number || '').match(/-(\d+)$/);
+        const utilise = m ? Number(m[1]) : 0;
+        const champ = isQuote ? 'nextQuoteNum' : 'nextInvoiceNum';
+        db.company[champ] = Math.max(prochainNumero(kind), utilise + 1);
+        await saveCompany();
+      }
       // Devis accepté : la facture d'acompte part toute seule
       if (isQuote && doc.status === 'accepted' && statutAvant !== 'accepted') await createDepositInvoice(doc);
       navigate(`${route}/view/${doc.id}`);
@@ -2475,7 +2498,12 @@ function wrapPrintSheets() {
       const bornes = decouperEnPages(pg, dispo);
       if (bornes.length <= 2) { unites.push({ node: pg, ajuster: false }); return; }
       for (let k = 0; k < bornes.length - 1; k++) {
-        unites.push({ node: k === 0 ? pg : pg.cloneNode(true), debut: bornes[k], hauteur: bornes[k + 1] - bornes[k] });
+        // dernière page : on ouvre la fenêtre sur toute la hauteur utile.
+        // Rien ne suit, et l'impression rend le texte un peu plus haut que l'écran :
+        // sans cette marge, la bordure du dernier bloc se fait raboter.
+        const derniere = k === bornes.length - 2;
+        const hauteur = derniere ? dispo : bornes[k + 1] - bornes[k];
+        unites.push({ node: k === 0 ? pg : pg.cloneNode(true), debut: bornes[k], hauteur });
       }
     } else {
       unites.push({ node: pg, ajuster: true });
