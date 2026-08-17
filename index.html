@@ -196,7 +196,9 @@
   table.bp-lines thead th:last-child, table.bp-lines thead th:nth-child(4) { text-align: right; }
   table.bp-lines tbody td { padding: 5pt 8pt; border-bottom: 1pt solid var(--bp-line); font-size: 8pt; vertical-align: top; color: #27272a; }
   table.bp-lines tbody tr:nth-child(even) td { background: #fbfaf8; }
-  .bp-desc { text-align: left; line-height: 1.5; }
+  .bp-desc { text-align: left; line-height: 1.45; }
+  .bp-desc-t { font-weight: 700; color: var(--bp-dark); }
+  .bp-desc-s { margin-top: 1.5pt; padding-left: 7pt; color: #3f3f46; }
   .bp-c { text-align: center; white-space: nowrap; color: #52525b; }
   .bp-r { text-align: right; white-space: nowrap; font-weight: 600; }
   .bp-bottom { display: flex; gap: 18pt; margin-top: 6pt; page-break-inside: avoid; }
@@ -2052,12 +2054,17 @@ function renderPrintView(doc, kind) {
       </tr></thead>
       <tbody>
         ${doc.lines.map((l, i) => {
-          const parts = String(l.description||'').split(/\n/);
-          let title = parts[0] || '';
-          const sub = parts.slice(1).join(' ').trim();
-          if (!/^\d+\.\s/.test(title)) title = `${i+1}. ${title}`;
+          // la mise en page saisie dans l'editeur est conservee telle quelle
+          const lignes = String(l.description || '').split(/\r?\n/);
+          let titre = (lignes[0] || '').trim();
+          if (!/^\d+[.)]\s/.test(titre)) titre = `${i+1}. ${titre}`;
+          const suite = lignes.slice(1)
+            .map(t => t.replace(/\s+$/, ''))
+            .filter((t, k, tab) => t !== '' || (k > 0 && k < tab.length - 1))
+            .map(t => escapeHtml(t) || '&nbsp;')
+            .join('<br>');
           return `<tr>
-            <td class="bp-desc">${escapeHtml(title)}${sub ? ', ' + escapeHtml(sub) : ''}</td>
+            <td class="bp-desc"><span class="bp-desc-t">${escapeHtml(titre)}</span>${suite ? `<div class="bp-desc-s">${suite}</div>` : ''}</td>
             <td class="bp-c">${escapeHtml(l.unit)}</td>
             <td class="bp-c">${l.quantity}</td>
             <td class="bp-r">${fmtMoney(lineDisplayUnitPrice(l))}</td>
