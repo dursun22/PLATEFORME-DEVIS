@@ -899,10 +899,18 @@ function watchPublicQuoteSignatures() {
    Le pourcentage d'acompte du devis fait foi ; le reste est réparti
    dans la même proportion, et le solde absorbe les arrondis.
    ============================================================= */
+function pctAcompte(quote) {
+  const brut = quote.deposit;
+  if (brut === undefined || brut === null || brut === '') return 30;   // devis anciens : échéancier par défaut
+  return Math.max(0, Math.min(100, Number(brut) || 0));
+}
+
 function echeancesDevis(quote) {
-  const pct1 = Number(quote.deposit) || 30;
-  const reste = Math.max(0, 100 - pct1);
+  const pct1 = pctAcompte(quote);
   const ttc = calcDoc(quote).ttc;
+  // Pas d'acompte : une facture unique du montant total (petits chantiers)
+  if (pct1 === 0) return [{ stage: 'full', libelle: 'Facture unique', pct: 100, montant: Math.round(ttc * 100) / 100 }];
+  const reste = Math.max(0, 100 - pct1);
   const mAcompte = ttc * pct1 / 100;
   const mMi = ttc * (reste * 4 / 7) / 100;
   const arrondi = (x) => Math.round(x * 100) / 100;
@@ -923,21 +931,25 @@ async function createStageInvoice(quote, stage) {
   if (!e || e.montant <= 0.005) return null;
   const prefix = db.company.invoicePrefix || 'FAC';
   const num = db.company.nextInvoiceNum || 1;
-  const suffixe = { deposit: 'ACOMPTE', progress: 'MI-CHANTIER', balance: 'SOLDE' }[stage];
+  const suffixe = { deposit: 'ACOMPTE', progress: 'MI-CHANTIER', balance: 'SOLDE', full: '' }[stage];
   const invoice = {
     id: uid(),
-    number: `${prefix}-${new Date().getFullYear()}-${String(num).padStart(3, '0')}-${suffixe}`,
+    number: `${prefix}-${new Date().getFullYear()}-${String(num).padStart(3, '0')}${suffixe ? '-' + suffixe : ''}`,
     date: today(),
     dueDate: addDays(today(), 30),
     clientId: quote.clientId,
-    object: `${e.libelle} ${e.pct} % sur devis ${quote.number}${quote.object ? ' — ' + quote.object : ''}`,
+    object: (stage === 'full' ? `Travaux — devis ${quote.number}` : `${e.libelle} ${e.pct} % sur devis ${quote.number}`)
+      + (quote.object ? ' — ' + quote.object : ''),
     lines: [{
       id: uid(),
-      description: `${e.libelle} ${e.pct} % sur devis ${quote.number}${quote.object ? '\n' + quote.object : ''}`,
+      description: (stage === 'full' ? `Travaux réalisés — devis ${quote.number}` : `${e.libelle} ${e.pct} % sur devis ${quote.number}`)
+        + (quote.object ? '\n' + quote.object : ''),
       quantity: 1, unit: 'forfait', unitPrice: e.montant, tva: 0
     }],
     conditions: (db.company.tvaRegime === 'franchise' ? 'TVA non applicable, art. 293 B du CGI. ' : '')
-      + `Facture « ${e.libelle.toLowerCase()} » relative au devis ${quote.number}.`,
+      + (stage === 'full'
+          ? `Facture relative au devis ${quote.number}, sans acompte.`
+          : `Facture « ${e.libelle.toLowerCase()} » relative au devis ${quote.number}.`),
     exclusions: '',
     status: 'draft',
     sourceQuoteId: quote.id,
@@ -951,10 +963,13 @@ async function createStageInvoice(quote, stage) {
   return invoice;
 }
 
-/* Créée automatiquement dès qu'un devis passe en « Accepté » */
+/* Créée automatiquement dès qu'un devis passe en « Accepté » :
+   l'acompte s'il y en a un, sinon la facture unique. */
 async function createDepositInvoice(quote) {
-  const inv = await createStageInvoice(quote, 'deposit');
-  if (inv) toast('💸 Facture d\'acompte créée : ' + inv.number);
+  const premiere = echeancesDevis(quote)[0];
+  if (!premiere) return null;
+  const inv = await createStageInvoice(quote, premiere.stage);
+  if (inv) toast('💸 ' + (premiere.stage === 'full' ? 'Facture créée : ' : 'Facture d\'acompte créée : ') + inv.number);
   return inv;
 }
 
@@ -1992,6 +2007,7 @@ function renderPrintView(doc, kind) {
         <div class="bp-block">
           <div class="bp-block-title">Instructions de paiement</div>
           ${co.paymentTerms ? `<div style="white-space:pre-wrap">${escapeHtml(co.paymentTerms)}</div>` : ''}
+          ${isQuote && depositPct === 0 ? `<div style="margin-top:3pt;font-weight:700;color:var(--bp-dark)">Ce devis ne prévoit pas d'acompte : une facture unique sera émise à la réception des travaux, payable à 30 jours.</div>` : ''}
           ${co.iban ? `<div style="margin-top:4pt">
             <div style="font-weight:700;color:var(--bp-dark)">Coordonnées bancaires</div>
             ${co.accountHolder ? `<div>Titulaire : ${escapeHtml(co.accountHolder)}</div>` : ''}
