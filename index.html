@@ -1869,7 +1869,8 @@ function bindFinChantier(quote) {
     const champ = document.getElementById('doc-enddate');
     const val = champ ? champ.value : '';
     if (!val) { alert('Indiquez la date de fin des travaux.'); return; }
-    await saveDoc({ ...quote, endDate: val }, 'quote');
+    // la date de fin fait foi : elle devient aussi la date d'effet du PV
+    await saveDoc({ ...quote, endDate: val, pv: { ...(quote.pv || {}), effectDate: val } }, 'quote');
     toast('Chantier terminé le ' + fmtDate(val));
   };
   const a = document.getElementById('btn-fin-annuler');
