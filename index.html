@@ -1636,12 +1636,6 @@ function renderQuoteEditor(id, kind) {
         <div class="form-row"><div><label>Statut</label><select id="doc-status">
           ${(isQuote ? [['draft','Brouillon'],['sent','Envoyé'],['accepted','Accepté'],['refused','Refusé']] : [['draft','Brouillon'],['sent','Envoyé'],['paid','Payé'],['overdue','En retard']]).map(([v,l]) => `<option value="${v}" ${v===doc.status?'selected':''}>${l}</option>`).join('')}
         </select></div><div></div></div>
-        ${isQuote ? `<h3>Document à joindre</h3>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 0">
-          <input type="checkbox" id="doc-attach-pv" ${doc.attachPv ? 'checked' : ''} style="width:auto;margin:0">
-          <span>Joindre le <strong>procès-verbal de réception</strong> à la fin du devis imprimé (après les CGV)</span>
-        </label>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px">Le contenu du PV se règle depuis la fiche du devis → bouton « 📋 PV de réception ». La levée des réserves reste un document séparé, à imprimer uniquement s'il y a des réserves.</div>` : ''}
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><a class="btn" href="#/${route}">Annuler</a><button class="btn btn-primary" id="doc-save-2">Enregistrer</button></div>`;
 
@@ -1774,7 +1768,6 @@ function renderQuoteEditor(id, kind) {
       else doc.dueDate = $('#doc-due').value;
       doc.object = $('#doc-object').value.trim(); doc.clientId = $('#doc-client').value;
       doc.conditions = $('#doc-conditions').value; doc.exclusions = $('#doc-exclusions').value; doc.status = $('#doc-status').value;
-      if ($('#doc-attach-pv')) doc.attachPv = $('#doc-attach-pv').checked;
       if ($('#doc-deposit')) doc.deposit = Number($('#doc-deposit').value) || 0;   // relu ici : l'échéancier en dépend
       if (!doc.clientId) { alert('Sélectionnez un client.'); return; }
       if (!doc.lines.length || !doc.lines.some(l => Number(l.unitPrice) > 0 || l.description.trim())) { alert('Ajoutez au moins une ligne.'); return; }
@@ -2099,7 +2092,7 @@ function renderPrintView(doc, kind) {
 
     <!-- ============ CGV (page suivante) ============ -->
     ${co.cgv ? `<div class="print-cgv"><h2>Conditions Générales de Vente et de Travaux</h2><div class="print-cgv-body">${formatCgvBody(co.cgv)}</div></div>` : ''}
-    ${isQuote && doc.attachPv ? pvPagesHtml(doc, false, 'reception') : ''}`;
+`;
 
   paginatePrintView();
 }
