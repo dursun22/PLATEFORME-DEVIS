@@ -2520,14 +2520,15 @@ function wrapPrintSheets() {
 /* Détermine où couper le devis : au ras d'un bloc ou d'une ligne du tableau,
    jamais au milieu d'un texte. Renvoie les bornes verticales des pages. */
 function decouperEnPages(pg, dispo) {
-  const total = pg.scrollHeight;
+  // +2 px : la fenêtre doit englober la bordure basse du dernier bloc, jamais la raser
+  const total = pg.scrollHeight + 2;
   if (total <= dispo + 6) return [0, total];
   const base = pg.getBoundingClientRect().top;
   // blocs insécables : on ne coupe jamais à l'intérieur de l'un d'eux
   const blocs = [];
   pg.querySelectorAll('.bp-header, .bp-client, table.bp-lines tbody tr, .bp-bottom, .bp-signs').forEach(n => {
     const r = n.getBoundingClientRect();
-    blocs.push({ haut: Math.round(r.top - base), bas: Math.round(r.bottom - base) });
+    blocs.push({ haut: Math.floor(r.top - base), bas: Math.ceil(r.bottom - base) + 1 });
   });
   const points = new Set([total]);
   blocs.forEach(b => { points.add(b.haut); points.add(b.bas); });
