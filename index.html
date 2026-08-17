@@ -1803,7 +1803,7 @@ function renderQuoteView(id, kind) {
     <div class="actions"><a class="btn" href="#/${backRoute}">← Retour</a><a class="btn" href="#/${route}/edit/${doc.id}">Modifier</a>
     ${isQuote ? `<button class="btn" id="btn-share">🔗 Lien public / e-signature</button>` : ''}
     ${!isQuote && doc.status !== 'paid' ? `<button class="btn" id="btn-markpaid" style="background:var(--success);color:#fff;border-color:var(--success)">✓ Marquer comme payée</button>` : ''}
-    ${isQuote ? `<a class="btn" href="#/devis/pv/${doc.id}">📋 PV de réception</a>` : ''}
+    ${isQuote && doc.endDate ? `<a class="btn" href="#/devis/pv/${doc.id}">📋 PV de réception</a>` : ''}
     <button class="btn" id="btn-preview">👁️ Aperçu</button>
     <button class="btn btn-primary" id="btn-print">⎙ Imprimer / PDF</button></div></div>
     <div class="card"><div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
@@ -1825,8 +1825,10 @@ function renderQuoteView(id, kind) {
       <div class="total-row"><span>Total TVA</span><strong>${fmtMoney(totals.tva)}</strong></div>
       <div class="total-row grand"><span>Total TTC</span><strong>${fmtMoney(totals.ttc)}</strong></div></div></div>
     ${doc.conditions ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)"><h3>Conditions</h3><div style="white-space:pre-wrap">${escapeHtml(doc.conditions)}</div></div>` : ''}</div>
+    ${isQuote ? finChantierCardHtml(doc) : ''}
     ${isQuote ? echeancierCardHtml(doc) : ''}
     ${attachmentsCardHtml(doc.id)}`;
+  bindFinChantier(doc);
   bindEcheancier(doc);
   bindAttachments(doc.id);
   $('#btn-print').onclick = () => { renderPrintView(doc, kind); window.print(); };
@@ -1840,6 +1842,41 @@ function renderQuoteView(id, kind) {
     const updated = { ...doc, status: 'paid', paidAt: today() };
     await saveDoc(updated, kind);
     toast('Facture payée — classée dans « Factures payées »');
+  };
+}
+
+/* Fin de chantier : la date saisie ici devient la date d'effet du PV de réception */
+function finChantierCardHtml(quote) {
+  const fini = !!quote.endDate;
+  return `<div class="card"><h3>🏁 Fin de chantier</h3>
+    <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
+      <div><label>Date de fin des travaux</label>
+        <input type="date" id="doc-enddate" value="${quote.endDate || ''}" style="max-width:220px"></div>
+      <button class="btn btn-primary" id="btn-fin">${fini ? 'Modifier' : 'Enregistrer'}</button>
+      ${fini
+        ? `<a class="btn" href="#/devis/pv/${quote.id}">📋 Établir le PV de réception</a>
+           <button class="btn btn-danger" id="btn-fin-annuler">Chantier non terminé</button>`
+        : ''}
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:10px">${fini
+      ? 'Cette date sert de date d\'effet au procès-verbal de réception. C\'est elle qui fait courir vos garanties légales.'
+      : 'Le procès-verbal de réception ne peut être établi qu\'une fois le chantier terminé : renseignez cette date pour le débloquer.'}</div></div>`;
+}
+
+function bindFinChantier(quote) {
+  const b = document.getElementById('btn-fin');
+  if (b) b.onclick = async () => {
+    const champ = document.getElementById('doc-enddate');
+    const val = champ ? champ.value : '';
+    if (!val) { alert('Indiquez la date de fin des travaux.'); return; }
+    await saveDoc({ ...quote, endDate: val }, 'quote');
+    toast('Chantier terminé le ' + fmtDate(val));
+  };
+  const a = document.getElementById('btn-fin-annuler');
+  if (a) a.onclick = async () => {
+    if (!confirm('Retirer la date de fin de chantier ? Le PV de réception ne sera plus accessible.')) return;
+    await saveDoc({ ...quote, endDate: '' }, 'quote');
+    toast('Date de fin retirée');
   };
 }
 
@@ -2071,7 +2108,7 @@ function renderPrintView(doc, kind) {
    PROCÈS-VERBAL DE RÉCEPTION DES TRAVAUX
    ============================================================= */
 function emptyPv(doc) {
-  return { effectDate: today(), place: db.company.city || '', ownerName: '', ownerQuality: '',
+  return { effectDate: doc.endDate || today(), place: db.company.city || '', ownerName: '', ownerQuality: '',
            quoteIds: [doc.id], exclusions: '', withReserves: false, reserves: '', leveeDate: '' };
 }
 function pvOf(doc) { return Object.assign(emptyPv(doc), doc.pv || {}); }
@@ -2274,6 +2311,14 @@ function renderPvList() {
 function renderPvScreen(id) {
   const doc = db.quotes.find(q => q.id === id);
   if (!doc) { $('#main').innerHTML = `<div class="card empty"><h3>Devis introuvable</h3></div>`; return; }
+  if (!doc.endDate) {
+    $('#main').innerHTML = `<div class="topbar"><h1>📋 PV de réception</h1>
+      <div class="actions"><a class="btn" href="#/devis/view/${doc.id}">← Retour au devis</a></div></div>
+      <div class="card empty"><h3>Chantier non terminé</h3>
+      <p>Le procès-verbal de réception se fonde sur la date de fin des travaux : c'est elle qui fait courir vos garanties légales.<br>
+      Renseignez-la sur la fiche du devis, section « 🏁 Fin de chantier ».</p></div>`;
+    return;
+  }
   const client = clientById(doc.clientId);
   const pv = pvOf(doc);
   const sameClient = db.quotes.filter(q => q.clientId === doc.clientId)
