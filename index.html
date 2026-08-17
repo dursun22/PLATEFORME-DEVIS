@@ -1847,7 +1847,10 @@ function renderQuoteView(id, kind) {
 function echeancierCardHtml(quote) {
   if (quote.status !== 'accepted') {
     return `<div class="card"><h3>💸 Facturation par échéances</h3>
-      <div style="font-size:13px;color:var(--muted)">Passez ce devis au statut « Accepté » : la facture d'acompte sera créée automatiquement, puis vous générerez ici celles de mi-chantier et de solde.</div></div>`;
+      <div style="font-size:13px;color:var(--muted)">${pctAcompte(quote) === 0
+        ? 'Ce devis ne prévoit pas d\'acompte. Passez-le au statut « Accepté » : une facture unique du montant total sera créée automatiquement.'
+        : 'Passez ce devis au statut « Accepté » : la facture d\'acompte sera créée automatiquement, puis vous générerez ici celles de mi-chantier et de solde.'}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px">Astuce : mettez l'acompte à <strong>0 %</strong> pour un petit chantier facturé en une seule fois.</div></div>`;
   }
   const lignes = echeancesDevis(quote).map(e => {
     const f = factureEtape(quote.id, e.stage);
