@@ -218,6 +218,8 @@
   .bp-sign-title { font-weight: 800; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em; color: var(--bp-amber); margin-bottom: 5pt; }
   .bp-sign-who { font-weight: 700; color: var(--bp-dark); font-size: 9pt; margin-bottom: 2pt; }
   .bp-sign-space { height: 44pt; }
+  /* signature scannee de l'entreprise : occupe la zone laissee libre, sans la deformer */
+  .bp-sign-img { display: block; height: 42pt; max-width: 100%; object-fit: contain; object-position: left center; margin-top: 2pt; }
   .bp-sign-done { margin-top: 8pt; font-weight: 600; color: #15803d; line-height: 1.35; }
   .bp-page1 { position: relative; box-sizing: border-box; }
   .bp-footer { position: absolute; left: 0; right: 0; padding-top: 5pt; border-top: 0.75pt solid var(--bp-line); display: flex; justify-content: space-between; font-size: 7pt; color: #a1a1aa; }
@@ -248,6 +250,7 @@
   .pv-sign-title { font-weight: 800; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em; color: var(--bp-amber); margin-bottom: 5pt; }
   .pv-sign-who { font-weight: 700; color: var(--bp-dark); font-size: 9pt; margin-bottom: 2pt; }
   .pv-sign-space { height: 70pt; }
+  .pv-sign-img { display: block; height: 60pt; max-width: 100%; object-fit: contain; object-position: left center; margin-top: 4pt; }
   .pv-page2 { page-break-before: always; }
   .pv-break { page-break-before: always; }
   /* CGV page 2 */
@@ -756,6 +759,56 @@ function compressImage(file) {
       let scale = 1;
       while (out.length > PJ_MAX_OCTETS && scale > 0.35) { scale -= 0.15; out = draw(w * scale, h * scale, 0.72); }
       if (out.length > PJ_MAX_OCTETS) return reject(new Error('Image trop lourde même après compression'));
+      resolve(out);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Fichier image illisible')); };
+    img.src = url;
+  });
+}
+
+/* Prépare une signature : détoure le fond blanc (photo ou scan sur papier),
+   recadre sur le tracé et sort un PNG transparent léger. */
+function prepareSignature(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.naturalWidth, h = img.naturalHeight;
+      const MAX = 900;
+      if (Math.max(w, h) > MAX) { const k = MAX / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, w); c.height = Math.max(1, h);
+      const x = c.getContext('2d', { willReadFrequently: true });
+      x.drawImage(img, 0, 0, c.width, c.height);
+      const im = x.getImageData(0, 0, c.width, c.height);
+      const d = im.data;
+      // seuils : au-dessus de CLAIR le pixel est du papier, en dessous de SOMBRE c'est le trait
+      const CLAIR = 215, SOMBRE = 110;
+      let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+      for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+        const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        let a = d[i + 3] === 0 ? 0
+          : lum >= CLAIR ? 0
+          : lum <= SOMBRE ? 255
+          : Math.round(255 * (CLAIR - lum) / (CLAIR - SOMBRE));
+        d[i] = 17; d[i + 1] = 17; d[i + 2] = 17; d[i + 3] = a;
+        if (a > 40) {
+          const px = p % c.width, py = (p / c.width) | 0;
+          if (px < x0) x0 = px; if (px > x1) x1 = px;
+          if (py < y0) y0 = py; if (py > y1) y1 = py;
+        }
+      }
+      if (x1 < 0) return reject(new Error("Aucun tracé détecté : la photo est peut-être trop claire."));
+      x.putImageData(im, 0, 0);
+      const m = 4;
+      const cx = Math.max(0, x0 - m), cy = Math.max(0, y0 - m);
+      const cw = Math.min(c.width, x1 + m) - cx + 1, ch = Math.min(c.height, y1 + m) - cy + 1;
+      const c2 = document.createElement('canvas');
+      c2.width = cw; c2.height = ch;
+      c2.getContext('2d').drawImage(c, cx, cy, cw, ch, 0, 0, cw, ch);
+      const out = c2.toDataURL('image/png');
+      if (out.length > 400000) return reject(new Error('Image trop lourde : reprenez la photo de plus près.'));
       resolve(out);
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Fichier image illisible')); };
@@ -2076,7 +2129,9 @@ function renderPrintView(doc, kind) {
         <div class="bp-sign-title">L'entreprise</div>
         <div class="bp-sign-who">${escapeHtml([co.legalForm, co.name].filter(Boolean).join(' '))}</div>
         <div>Fait à ${escapeHtml(co.city || '')}, le ${fmtDate(doc.date)}</div>
-        <div class="bp-sign-space"></div>
+        ${co.signatureImg
+          ? `<img class="bp-sign-img" src="${co.signatureImg}" alt="Signature">`
+          : '<div class="bp-sign-space"></div>'}
       </div>
       <div class="bp-sign-box">
         <div class="bp-sign-title">Le client — bon pour accord</div>
@@ -2206,7 +2261,7 @@ function pvPagesHtml(doc, standalone, part) {
           <div class="pv-sign-title">L'entrepreneur</div>
           <div class="pv-sign-who">${escapeHtml([co.legalForm, co.name].filter(Boolean).join(' '))}</div>
           <div>Date et signature</div>
-          <div class="pv-sign-space"></div>
+          ${co.signatureImg ? `<img class="pv-sign-img" src="${co.signatureImg}" alt="Signature">` : '<div class="pv-sign-space"></div>'}
         </div>
       </div>
     </div>`;
@@ -2240,7 +2295,7 @@ function pvPagesHtml(doc, standalone, part) {
           <div class="pv-sign-title">L'entrepreneur</div>
           <div class="pv-sign-who">${escapeHtml([co.legalForm, co.name].filter(Boolean).join(' '))}</div>
           <div>Date et signature</div>
-          <div class="pv-sign-space"></div>
+          ${co.signatureImg ? `<img class="pv-sign-img" src="${co.signatureImg}" alt="Signature">` : '<div class="pv-sign-space"></div>'}
         </div>
       </div>
     </div>`;
@@ -2593,6 +2648,22 @@ function renderSettings() {
       </div>
     </div>
 
+    <div class="card"><h3>✍️ Ma signature</h3>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px">Signez sur une feuille blanche, prenez-la en photo, puis chargez-la ici. Le fond blanc est détouré automatiquement. La signature sera apposée sur chaque devis et chaque PV de réception, à la place « L'entreprise ».</p>
+      <div class="form-row">
+        <div>
+          <label>Image de la signature (PNG/JPG)</label>
+          <input type="file" id="co-sign-file" accept="image/*" style="padding:6px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--muted);width:100%">
+        </div>
+        <div>
+          ${c.signatureImg
+            ? `<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center"><img src="${c.signatureImg}" style="max-height:70px;max-width:100%"></div><button class="btn btn-sm btn-danger" id="co-sign-remove" type="button" style="margin-top:6px">Retirer la signature</button>`
+            : '<div style="font-size:12px;color:var(--muted);padding-top:26px">Aucune signature enregistrée : un cadre vide est imprimé pour signer à la main.</div>'}
+        </div>
+      </div>
+    </div>
+
+
     <div class="card"><h3>Identité</h3>
       <div class="form-row"><div><label>Nom / Raison sociale</label><input id="co-name" value="${escapeHtml(c.name)}"></div>
       <div><label>Forme juridique</label><select id="co-legalForm">${['EI','EIRL','EURL','SARL','SAS','SASU','Auto-entrepreneur','SCI','Autre'].map(f => `<option ${f===c.legalForm?'selected':''}>${f}</option>`).join('')}</select></div></div>
@@ -2655,6 +2726,26 @@ function renderSettings() {
   if (logoRemove) logoRemove.onclick = async () => {
     if (!confirm('Retirer le logo ?')) return;
     db.company.logo = ''; await saveCompany(); toast('Logo retiré'); renderSettings();
+  };
+  // Signature de l'entreprise
+  const signInput = document.getElementById('co-sign-file');
+  if (signInput) signInput.onchange = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    try {
+      toast('Traitement de la signature…');
+      db.company.signatureImg = await prepareSignature(file);
+      await saveCompany();
+      toast('Signature enregistrée');
+      renderSettings();
+    } catch (err) {
+      alert('Signature non enregistrée : ' + err.message);
+      e.target.value = '';
+    }
+  };
+  const signRemove = document.getElementById('co-sign-remove');
+  if (signRemove) signRemove.onclick = async () => {
+    if (!confirm('Retirer la signature ? Les devis imprimeront à nouveau un cadre vide.')) return;
+    db.company.signatureImg = ''; await saveCompany(); toast('Signature retirée'); renderSettings();
   };
   // Sync color picker with hex input
   const colorPicker = document.getElementById('co-primaryColor');
