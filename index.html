@@ -1775,6 +1775,7 @@ function renderQuoteEditor(id, kind) {
       doc.object = $('#doc-object').value.trim(); doc.clientId = $('#doc-client').value;
       doc.conditions = $('#doc-conditions').value; doc.exclusions = $('#doc-exclusions').value; doc.status = $('#doc-status').value;
       if ($('#doc-attach-pv')) doc.attachPv = $('#doc-attach-pv').checked;
+      if ($('#doc-deposit')) doc.deposit = Number($('#doc-deposit').value) || 0;   // relu ici : l'échéancier en dépend
       if (!doc.clientId) { alert('Sélectionnez un client.'); return; }
       if (!doc.lines.length || !doc.lines.some(l => Number(l.unitPrice) > 0 || l.description.trim())) { alert('Ajoutez au moins une ligne.'); return; }
       const statutAvant = editing ? editing.status : null;
