@@ -894,38 +894,68 @@ function watchPublicQuoteSignatures() {
   });
 }
 
-async function createDepositInvoice(quote) {
-  const depositPct = Number(quote.deposit) || 30;
-  const totals = calcDoc(quote);
-  const depositAmount = totals.ttc * depositPct / 100;
-  if (depositAmount <= 0) return;
-  // Check if already exists
-  const existing = db.invoices.find(inv => inv.sourceQuoteId === quote.id && inv.isDeposit);
-  if (existing) return;
+/* =============================================================
+   FACTURATION PAR ÉCHÉANCES (30 % commande / 40 % mi-chantier / 30 % solde)
+   Le pourcentage d'acompte du devis fait foi ; le reste est réparti
+   dans la même proportion, et le solde absorbe les arrondis.
+   ============================================================= */
+function echeancesDevis(quote) {
+  const pct1 = Number(quote.deposit) || 30;
+  const reste = Math.max(0, 100 - pct1);
+  const ttc = calcDoc(quote).ttc;
+  const mAcompte = ttc * pct1 / 100;
+  const mMi = ttc * (reste * 4 / 7) / 100;
+  const arrondi = (x) => Math.round(x * 100) / 100;
+  return [
+    { stage: 'deposit',  libelle: 'Acompte',     pct: arrondi(pct1),          montant: arrondi(mAcompte) },
+    { stage: 'progress', libelle: 'Mi-chantier', pct: arrondi(reste * 4 / 7), montant: arrondi(mMi) },
+    { stage: 'balance',  libelle: 'Solde',       pct: arrondi(reste * 3 / 7), montant: arrondi(ttc - arrondi(mAcompte) - arrondi(mMi)) }
+  ];
+}
+
+function factureEtape(quoteId, stage) {
+  return db.invoices.find(i => i.sourceQuoteId === quoteId &&
+    (i.stage === stage || (stage === 'deposit' && !i.stage && i.isDeposit)));
+}
+async function createStageInvoice(quote, stage) {
+  if (factureEtape(quote.id, stage)) return null;
+  const e = echeancesDevis(quote).find(x => x.stage === stage);
+  if (!e || e.montant <= 0.005) return null;
   const prefix = db.company.invoicePrefix || 'FAC';
   const num = db.company.nextInvoiceNum || 1;
+  const suffixe = { deposit: 'ACOMPTE', progress: 'MI-CHANTIER', balance: 'SOLDE' }[stage];
   const invoice = {
     id: uid(),
-    number: `${prefix}-${new Date().getFullYear()}-${String(num).padStart(3,'0')}-ACOMPTE`,
+    number: `${prefix}-${new Date().getFullYear()}-${String(num).padStart(3, '0')}-${suffixe}`,
     date: today(),
     dueDate: addDays(today(), 30),
     clientId: quote.clientId,
-    object: `Acompte ${depositPct}% sur devis ${quote.number} — ${quote.object||''}`.trim(),
+    object: `${e.libelle} ${e.pct} % sur devis ${quote.number}${quote.object ? ' — ' + quote.object : ''}`,
     lines: [{
       id: uid(),
-      description: `Acompte ${depositPct}% sur devis ${quote.number}\n${quote.object||''}`,
-      quantity: 1, unit: 'forfait', unitPrice: depositAmount, tva: 0
+      description: `${e.libelle} ${e.pct} % sur devis ${quote.number}${quote.object ? '\n' + quote.object : ''}`,
+      quantity: 1, unit: 'forfait', unitPrice: e.montant, tva: 0
     }],
-    conditions: (db.company.tvaRegime==='franchise' ? 'TVA non applicable, art. 293 B du CGI. ' : '') + `Facture d'acompte relative au devis ${quote.number} accepté le ${fmtDate(quote.signature?.signedAt||today())}.`,
+    conditions: (db.company.tvaRegime === 'franchise' ? 'TVA non applicable, art. 293 B du CGI. ' : '')
+      + `Facture « ${e.libelle.toLowerCase()} » relative au devis ${quote.number}.`,
+    exclusions: '',
     status: 'draft',
     sourceQuoteId: quote.id,
-    isDeposit: true,
-    depositPct
+    stage,
+    isDeposit: stage === 'deposit',
+    depositPct: e.pct
   };
   await setDoc(doc(dbFs, 'workspace', 'main', 'invoices', invoice.id), invoice);
   db.company.nextInvoiceNum = num + 1;
   await saveCompany();
-  toast('💸 Facture d\'acompte créée : ' + invoice.number);
+  return invoice;
+}
+
+/* Créée automatiquement dès qu'un devis passe en « Accepté » */
+async function createDepositInvoice(quote) {
+  const inv = await createStageInvoice(quote, 'deposit');
+  if (inv) toast('💸 Facture d\'acompte créée : ' + inv.number);
+  return inv;
 }
 
 /* =============================================================
@@ -1732,8 +1762,11 @@ function renderQuoteEditor(id, kind) {
       if ($('#doc-attach-pv')) doc.attachPv = $('#doc-attach-pv').checked;
       if (!doc.clientId) { alert('Sélectionnez un client.'); return; }
       if (!doc.lines.length || !doc.lines.some(l => Number(l.unitPrice) > 0 || l.description.trim())) { alert('Ajoutez au moins une ligne.'); return; }
+      const statutAvant = editing ? editing.status : null;
       await saveDoc(doc, kind);
       if (!editing) { db.company[isQuote ? 'nextQuoteNum' : 'nextInvoiceNum'] = (Number(db.company[isQuote ? 'nextQuoteNum' : 'nextInvoiceNum'])||1) + 1; await saveCompany(); }
+      // Devis accepté : la facture d'acompte part toute seule
+      if (isQuote && doc.status === 'accepted' && statutAvant !== 'accepted') await createDepositInvoice(doc);
       navigate(`${route}/view/${doc.id}`);
       toast(isArchived(doc, kind)
         ? (isQuote ? 'Enregistré — classé dans « Devis acceptés »' : 'Enregistré — classé dans « Factures payées »')
@@ -1753,7 +1786,6 @@ function renderQuoteView(id, kind) {
   $('#main').innerHTML = `<div class="topbar"><h1>${isQuote?'Devis':'Facture'} ${escapeHtml(doc.number)}</h1>
     <div class="actions"><a class="btn" href="#/${backRoute}">← Retour</a><a class="btn" href="#/${route}/edit/${doc.id}">Modifier</a>
     ${isQuote ? `<button class="btn" id="btn-share">🔗 Lien public / e-signature</button>` : ''}
-    ${isQuote && doc.status === 'accepted' && !db.invoices.find(i => i.sourceQuoteId === doc.id && i.isDeposit) ? `<button class="btn" id="btn-deposit">💸 Générer facture acompte</button>` : ''}
     ${!isQuote && doc.status !== 'paid' ? `<button class="btn" id="btn-markpaid" style="background:var(--success);color:#fff;border-color:var(--success)">✓ Marquer comme payée</button>` : ''}
     ${isQuote ? `<a class="btn" href="#/devis/pv/${doc.id}">📋 PV de réception</a>` : ''}
     <button class="btn" id="btn-preview">👁️ Aperçu</button>
@@ -1777,7 +1809,9 @@ function renderQuoteView(id, kind) {
       <div class="total-row"><span>Total TVA</span><strong>${fmtMoney(totals.tva)}</strong></div>
       <div class="total-row grand"><span>Total TTC</span><strong>${fmtMoney(totals.ttc)}</strong></div></div></div>
     ${doc.conditions ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)"><h3>Conditions</h3><div style="white-space:pre-wrap">${escapeHtml(doc.conditions)}</div></div>` : ''}</div>
+    ${isQuote ? echeancierCardHtml(doc) : ''}
     ${attachmentsCardHtml(doc.id)}`;
+  bindEcheancier(doc);
   bindAttachments(doc.id);
   $('#btn-print').onclick = () => { renderPrintView(doc, kind); window.print(); };
   $('#btn-preview').onclick = () => showPreview(doc, kind);
@@ -1786,15 +1820,51 @@ function renderQuoteView(id, kind) {
     await navigator.clipboard.writeText(url);
     toast('Lien public copié — vous pouvez l\'envoyer au client');
   };
-  if ($('#btn-deposit')) $('#btn-deposit').onclick = async () => {
-    if (!confirm('Créer une facture d\'acompte 30% pour ce devis ?')) return;
-    await createDepositInvoice(doc);
-  };
   if ($('#btn-markpaid')) $('#btn-markpaid').onclick = async () => {
     const updated = { ...doc, status: 'paid', paidAt: today() };
     await saveDoc(updated, kind);
     toast('Facture payée — classée dans « Factures payées »');
   };
+}
+
+/* Suivi des trois factures d'un devis accepté */
+function echeancierCardHtml(quote) {
+  if (quote.status !== 'accepted') {
+    return `<div class="card"><h3>💸 Facturation par échéances</h3>
+      <div style="font-size:13px;color:var(--muted)">Passez ce devis au statut « Accepté » : la facture d'acompte sera créée automatiquement, puis vous générerez ici celles de mi-chantier et de solde.</div></div>`;
+  }
+  const lignes = echeancesDevis(quote).map(e => {
+    const f = factureEtape(quote.id, e.stage);
+    const etat = f
+      ? `<a class="btn btn-sm" href="#/factures/view/${f.id}">${escapeHtml(f.number)}</a> ${statusBadge(f.status, 'invoice')}`
+      : `<button class="btn btn-sm btn-primary" data-gen-stage="${e.stage}">Générer</button>`;
+    return `<tr><td><strong>${e.libelle}</strong></td><td>${e.pct} %</td>
+      <td style="text-align:right">${fmtMoney(e.montant)}</td><td style="text-align:right">${etat}</td></tr>`;
+  }).join('');
+  const emises = db.invoices.filter(i => i.sourceQuoteId === quote.id);
+  const facture = emises.reduce((s, i) => s + calcDoc(i).ttc, 0);
+  const encaisse = emises.filter(i => i.status === 'paid').reduce((s, i) => s + calcDoc(i).ttc, 0);
+  const total = calcDoc(quote).ttc;
+  return `<div class="card"><h3>💸 Facturation par échéances</h3>
+    <table><thead><tr><th>Échéance</th><th>Part</th><th style="text-align:right">Montant</th><th></th></tr></thead>
+    <tbody>${lignes}</tbody></table>
+    <div style="display:flex;gap:28px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+      <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Total du devis</div>
+        <div style="font-size:18px;font-weight:700">${fmtMoney(total)}</div></div>
+      <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Facturé</div>
+        <div style="font-size:18px;font-weight:700;color:var(--accent)">${fmtMoney(facture)}</div></div>
+      <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Encaissé</div>
+        <div style="font-size:18px;font-weight:700;color:var(--success)">${fmtMoney(encaisse)}</div></div>
+      <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Reste à facturer</div>
+        <div style="font-size:18px;font-weight:700">${fmtMoney(Math.max(0, total - facture))}</div></div>
+    </div></div>`;
+}
+
+function bindEcheancier(quote) {
+  Array.from(document.querySelectorAll('[data-gen-stage]')).forEach(b => b.onclick = async () => {
+    const inv = await createStageInvoice(quote, b.dataset.genStage);
+    toast(inv ? 'Facture créée : ' + inv.number : 'Cette facture existe déjà');
+  });
 }
 
 function formatCgvBody(text) {
