@@ -1,0 +1,44 @@
+// Regles de securite Firestore — copie de reference.
+//
+// ATTENTION : ce fichier documente les regles, il ne les applique pas.
+// Les regles qui font foi sont celles publiees dans la console Firebase :
+//   console.firebase.google.com > Firestore Database > Regles
+// Toute modification ici doit y etre republiee a la main, sinon elle n'a aucun effet.
+//
+// Les adresses de la liste blanche sont remplacees par des marqueurs : le depot est
+// public. Les vraies valeurs sont dans la console.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Seuls ces comptes ont acces aux donnees de l'entreprise.
+    // Creer un compte ne donne donc aucun acces.
+    function autorise() {
+      return request.auth != null && request.auth.token.email in [
+        'ADRESSE_PROPRIETAIRE',
+        'ADRESSE_SECONDAIRE'
+      ];
+    }
+
+    match /workspace/{document=**} {
+      allow read, write: if autorise();
+    }
+
+    // Devis partages : le client ouvre SON lien et ne peut que signer.
+    // 'get' seul, jamais 'list' : sans cela n'importe qui pourrait inventorier
+    // la collection et aspirer les donnees personnelles de tous les clients.
+    match /publicQuotes/{quoteId} {
+      allow get: if true;
+      allow list: if autorise();
+      allow create, delete: if autorise();
+      allow update: if autorise()
+        || (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quote', 'acceptedAt'])
+          && !('signature' in resource.data.quote)
+          && request.resource.data.quote.diff(resource.data.quote).affectedKeys().hasOnly(['signature', 'status'])
+          && request.resource.data.quote.status == 'accepted'
+        );
+    }
+  }
+}
