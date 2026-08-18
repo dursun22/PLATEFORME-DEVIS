@@ -1,0 +1,13 @@
+{
+  "name": "plateforme-devis",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Devis et factures — EI YASLIOGLU Dursun",
+  "scripts": {
+    "test": "node tests/run.mjs"
+  },
+  "devDependencies": {
+    "linkedom": "^0.18.5"
+  }
+}
